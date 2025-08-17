@@ -13,22 +13,19 @@ const PRESETS: Record<PresetKey, number> = {
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
-
-  const lastCursorRef = useRef<{x: number; y: number}>({ x: 0, y: 0 });
+  const lastCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const CELL = 48;
   const WIDTH = 6;
   const HEIGHT = 12;
 
   const [scene, setScene] = useState<"title" | "play">("title");
-
   const [inputs, setInputs] = useState({
     startLines: 5,
     targetLines: 10,
     preset: "Normal" as PresetKey,
     rate: PRESETS["Normal"],
   });
-
   const [hud, setHud] = useState({
     score: 0,
     matches: 0,
@@ -49,34 +46,34 @@ export default function App() {
         if (e.key === "Enter") startGame();
         return;
       }
-      // scene === "play"
+      if (!engineRef.current) return;
+
       switch (e.key) {
         case "ArrowLeft":
-          engineRef.current!.moveCursor(-1, 0);
+          engineRef.current.moveCursor(-1, 0);
           break;
         case "ArrowRight":
-          engineRef.current!.moveCursor(1, 0);
+          engineRef.current.moveCursor(1, 0);
           break;
         case "ArrowUp":
-          engineRef.current!.moveCursor(0, -1);
+          engineRef.current.moveCursor(0, -1);
           break;
         case "ArrowDown":
-          engineRef.current!.moveCursor(0, 1);
+          engineRef.current.moveCursor(0, 1);
           break;
         case "z":
         case "Z":
         case " ":
-          engineRef.current!.swap();
+          engineRef.current.swap();
           break;
         case "x":
         case "X":
-          engineRef.current!.manualRaiseOnce();
+          engineRef.current.manualRaiseOnce();
           break;
         case "r":
         case "R":
           startGame();
           break;
-        // Removed pause/resume entirely
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -90,31 +87,24 @@ export default function App() {
       const dt = now - last;
       last = now;
 
-      if (scene === "play") {
-        engineRef.current!.update(dt);
-        const s = engineRef.current!.getState();
+      if (scene === "play" && engineRef.current) {
+        engineRef.current.update(dt);
+        const s = engineRef.current.getState();
 
-        // --- Cursor sticky fix ---
-        // If the engine ever reports (0,0) but our last cursor wasn't (0,0),
-        // restore the previous absolute cursor position. This protects against
-        // accidental resets during clear/settle/rise or unexpected re-inits.
         if (
           (s.cursorX === 0 && s.cursorY === 0) &&
           !(lastCursorRef.current.x === 0 && lastCursorRef.current.y === 0)
         ) {
-          engineRef.current!.setCursorAbsolute(
+          engineRef.current.setCursorAbsolute(
             lastCursorRef.current.x,
             lastCursorRef.current.y
           );
-          // refresh state after restore
-          const s2 = engineRef.current!.getState();
+          const s2 = engineRef.current.getState();
           drawStateToCanvas(ctx, s2, CELL, dt);
-          // also update HUD using s2 if you like; otherwise next frame will
         } else {
           drawStateToCanvas(ctx, s, CELL, dt);
         }
 
-        // Update last-known cursor (always)
         lastCursorRef.current = { x: s.cursorX, y: s.cursorY };
 
         let tilesAbove = 0;
@@ -137,9 +127,7 @@ export default function App() {
         });
 
         canvas.style.filter = s.hasWon || s.hasLost ? "blur(3px)" : "none";
-        drawStateToCanvas(ctx, s, CELL, dt);
       } else {
-        // Title scene background
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#0f0f12";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -228,7 +216,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Right side inputs */}
           <div style={{ fontSize: 14 }}>
             <div style={{ marginBottom: 8 }}>
               <label style={{ display: "block", marginBottom: 6 }}>
@@ -310,7 +297,6 @@ export default function App() {
 
             {scene === "play" ? (
               <div>
-                {/* Pause/Resume removed */}
                 <button onClick={() => startGame()}>Reset</button>
                 <p style={{ marginTop: 8, opacity: 0.8 }}>
                   Controls: Arrows = move • Z/Space = swap • X = raise • R = reset
@@ -327,7 +313,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Canvas + overlays */}
         <div style={{ position: "relative", width: WIDTH * CELL }}>
           <canvas
             ref={canvasRef}

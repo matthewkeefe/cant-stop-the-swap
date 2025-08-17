@@ -1,10 +1,3 @@
-// Prism Grid engine (TA-style):
-// - Rising stack from bottom (auto-rise pauses during clear/settle)
-// - Swap/match/chain with score using a chain-multiplier table
-// - Dashed clear line appears after target progress; win on clear below the line
-// - Manual raise (one row) when idle
-// Cells: -1 = empty, 0..N-1 = color index.
-
 export type Cell = number;
 export type Phase = "idle" | "clearing" | "settling";
 
@@ -12,7 +5,7 @@ export type FallPiece = {
   x: number;
   fromY: number;
   toY: number;
-  y: number; // fractional row during animation
+  y: number; 
   color: number;
 };
 
@@ -27,19 +20,13 @@ export type GameState = {
   matchMask: boolean[][];
   chainCount: number;
   fallPieces: FallPiece[];
-
-  // Scoring / progress
   score: number;
-  matchesTotal: number;        // number of clear events (chains counted as separate events)
-  linesClearedEq: number;      // tiles/width floored
+  matchesTotal: number;
+  linesClearedEq: number;
   targetLines: number;
-
-  // Rising stack
   autoRiseRateRowsPerSec: number;
   riseAccumRows: number;
-
-  // Win/Lose
-  clearLineY: number;          // 0 = top
+  clearLineY: number;
   showClearLine: boolean;
   hasWon: boolean;
   hasLost: boolean;
@@ -52,33 +39,22 @@ export class Engine {
   grid: Cell[][];
   cursorX = 0;
   cursorY = 0;
-
   phase: Phase = "idle";
   matchMask: boolean[][];
   clearTimerMs = 0;
   chainCount = 0;
-
-  // Animation (fall)
   fallPieces: FallPiece[] = [];
   fallSpeedRowsPerSec = 18;
-
-  // Score/progress
   score = 0;
   matchesTotal = 0;
   linesClearedEq = 0;
-  targetLines = 10; // UI can change
-
-  // Rising stack
-  autoRiseRateRowsPerSec = 0.6; // UI can change; paused during clear/settle
+  targetLines = 10;
+  autoRiseRateRowsPerSec = 0.6;
   riseAccumRows = 0;
-
-  // Win/Lose state
   clearLineY: number;
   showClearLine = false;
   hasWon = false;
   hasLost = false;
-
-  // Multiplier table (B1): x1->1, x2->2, x3->4, x4->8, x5->16...
   private chainMultTable = [1, 2, 4, 8, 16, 32, 64];
 
   constructor(width = 6, height = 12, numColors = 5) {
@@ -88,16 +64,13 @@ export class Engine {
       0,
       numColors
     );
-    // Start with an empty board; title screen will call setStartingLines(...)
     this.grid = Array.from({ length: height }, () =>
       Array.from({ length: width }, () => -1)
     );
     this.matchMask = this.blankMask();
-    // dashed line halfway by default (can tweak)
     this.clearLineY = Math.floor(this.height * 0.5);
   }
 
-  /** Fill bottom N rows with random tiles; rows above remain empty (-1). */
   setStartingLines(n: number) {
     const rows = Math.max(0, Math.min(n, this.height));
     for (let y = this.height - 1; y >= this.height - rows; y--) {
@@ -117,39 +90,42 @@ export class Engine {
     return Math.floor(Math.random() * this.colors.length);
   }
 
-  /** Set cursor to an absolute grid position (bypasses phase checks). */
   setCursorAbsolute(x: number, y: number) {
     this.cursorX = Math.max(0, Math.min(this.width - 2, x | 0));
     this.cursorY = Math.max(0, Math.min(this.height - 1, y | 0));
   }
 
-  // Cursor always moves
   moveCursor(dx: number, dy: number) {
     this.cursorX = Math.max(0, Math.min(this.width - 2, this.cursorX + dx));
     this.cursorY = Math.max(0, Math.min(this.height - 1, this.cursorY + dy));
   }
 
-  // Swap only when idle and both cells are non-empty
   swap() {
     if (this.phase !== "idle" || this.hasWon || this.hasLost) return;
     const x = this.cursorX;
     const y = this.cursorY;
     const a = this.grid[y][x];
     const b = this.grid[y][x + 1];
-    if (a < 0 || b < 0) return;
+
+    if (a < 0 && b < 0) return;
 
     this.grid[y][x] = b;
     this.grid[y][x + 1] = a;
 
-    const any = this.scanForMatches();
-    if (any) {
+    const anyMatches = this.scanForMatches();
+    if (anyMatches) {
       this.phase = "clearing";
       this.clearTimerMs = 230;
       this.chainCount = Math.max(this.chainCount, 1);
+      return;
+    }
+
+    if (a < 0 || b < 0) {
+      this.startSettlingAnimation();
+      return;
     }
   }
 
-  /** Manual raise one row (A1). Returns true if this caused a loss. */
   manualRaiseOnce(): boolean {
     if (this.phase !== "idle" || this.hasWon || this.hasLost) return false;
     const lost = this.insertRowFromBottom();
@@ -157,11 +133,9 @@ export class Engine {
     return lost;
   }
 
-  /** Called every frame with dt in ms. */
   update(dtMs: number) {
     if (this.hasWon || this.hasLost) return;
 
-    // Auto-rise only when idle (pause during clear/settle)
     if (this.phase === "idle" && this.autoRiseRateRowsPerSec > 0) {
       this.riseAccumRows += (this.autoRiseRateRowsPerSec * dtMs) / 1000;
       while (this.riseAccumRows >= 1) {
@@ -216,9 +190,6 @@ export class Engine {
         this.fallPieces = [];
       }
 
-      // Refill (blanks allowed to remain if you later add budgets)
-      this.fillNewCells();
-
       const cascades = this.scanForMatches();
       if (cascades) {
         this.phase = "clearing";
@@ -232,13 +203,10 @@ export class Engine {
     }
   }
 
-  // --- Matching/Clearing ---
-
   private scanForMatches(): boolean {
     this.matchMask = this.blankMask();
     let found = false;
 
-    // Horizontal
     for (let y = 0; y < this.height; y++) {
       let runStart = 0;
       for (let x = 1; x <= this.width; x++) {
@@ -256,7 +224,6 @@ export class Engine {
       }
     }
 
-    // Vertical
     for (let x = 0; x < this.width; x++) {
       let runStart = 0;
       for (let y = 1; y <= this.height; y++) {
@@ -273,11 +240,9 @@ export class Engine {
         }
       }
     }
-
     return found;
   }
 
-  /** Clear matched tiles; return count and whether any were below dashed line. */
   private applyClearAndCount(): { tilesCleared: number; clearedBelowLine: boolean } {
     let tilesCleared = 0;
     let clearedBelowLine = false;
@@ -295,7 +260,6 @@ export class Engine {
 
   private startSettlingAnimation() {
     this.fallPieces = [];
-
     for (let x = 0; x < this.width; x++) {
       const col: { color: number; fromY: number }[] = [];
       for (let y = 0; y < this.height; y++) {
@@ -314,28 +278,13 @@ export class Engine {
       }
       for (let y = writeY; y >= 0; y--) this.grid[y][x] = -1;
     }
-
     this.phase = "settling";
   }
 
-  private fillNewCells() {
-    for (let y = 0; y < this.height; y++) {
-      for (let x = 0; x < this.width; x++) {
-        if (this.grid[y][x] === -1) this.grid[y][x] = this.randColorIndex();
-      }
-    }
-  }
-
-  // --- Rising stack ---
-
-  /** Insert one new random row at the bottom; raise everything by 1; lose if top would overflow. */
-  private insertRowFromBottom(): boolean /* lost? */ {
-    // If top row occupied, raising would overflow -> lose.
+  private insertRowFromBottom(): boolean {
     for (let x = 0; x < this.width; x++) {
       if (this.grid[0][x] >= 0) return true;
     }
-
-    // Shift all rows up by 1 (top row discarded), write new bottom row
     for (let y = 0; y < this.height - 1; y++) {
       this.grid[y] = this.grid[y + 1].slice();
     }
@@ -343,11 +292,7 @@ export class Engine {
       this.randColorIndex()
     );
     this.grid[this.height - 1] = newRow;
-
-    // NEW: cursor should ride with the stack (move one row up on-screen)
-    // Clamp to 0..height-1 just in case
     this.cursorY = Math.max(0, this.cursorY - 1);
-
     return false;
   }
 
@@ -363,15 +308,12 @@ export class Engine {
       matchMask: this.matchMask,
       chainCount: this.chainCount,
       fallPieces: this.fallPieces,
-
       score: this.score,
       matchesTotal: this.matchesTotal,
       linesClearedEq: this.linesClearedEq,
       targetLines: this.targetLines,
-
       autoRiseRateRowsPerSec: this.autoRiseRateRowsPerSec,
       riseAccumRows: this.riseAccumRows,
-
       clearLineY: this.clearLineY,
       showClearLine: this.showClearLine,
       hasWon: this.hasWon,
