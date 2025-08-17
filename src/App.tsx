@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Engine } from "./game-core/engine";
-import { drawStateToCanvas } from "./renderer/canvasRenderer";
+import { drawStateToCanvas, type Skin, type SrcRect } from "./renderer/canvasRenderer";
+
+import backtilesPng from "./assets/kenney/spritesheet_backtiles.png";
+import backtilesXmlUrl from "./assets/kenney/spritesheet_backtiles.xml?url";
+import tilesBlackPng from "./assets/kenney/spritesheet_tilesBlack.png";
+import tilesBlackXmlUrl from "./assets/kenney/spritesheet_tilesBlack.xml?url";
 
 type PresetKey = "Easy" | "Normal" | "Hard" | "Custom";
 const PRESETS: Record<PresetKey, number> = {
@@ -10,10 +15,95 @@ const PRESETS: Record<PresetKey, number> = {
   Custom: 0,
 };
 
+// ---- Kenney atlas helpers (PNG + XML; with grid fallback if XML missing) ----
+type AtlasFrame = { name: string; x: number; y: number; w: number; h: number };
+type Atlas = { image: HTMLImageElement; frames: Record<string, AtlasFrame> };
+
+async function loadImage(url: string): Promise<HTMLImageElement> {
+  const img = new Image();
+  img.decoding = "async";
+  img.src = url;
+  await img.decode();
+  return img;
+}
+
+async function tryFetchText(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+function parseKenneyXml(xmlText: string): Record<string, AtlasFrame> {
+  const doc = new DOMParser().parseFromString(xmlText, "application/xml");
+  const result: Record<string, AtlasFrame> = {};
+  doc.querySelectorAll("SubTexture").forEach((el) => {
+    const name = el.getAttribute("name") || "";
+    const x = parseInt(el.getAttribute("x") || "0", 10);
+    const y = parseInt(el.getAttribute("y") || "0", 10);
+    const w = parseInt(el.getAttribute("width") || "0", 10);
+    const h = parseInt(el.getAttribute("height") || "0", 10);
+    result[name] = { name, x, y, w, h };
+  });
+  return result;
+}
+
+/** If no XML: slice the sheet into a grid (tweakable). */
+function makeGridFrames(img: HTMLImageElement, frameW: number, frameH: number): Record<string, AtlasFrame> {
+  const cols = Math.max(1, Math.floor(img.naturalWidth / frameW));
+  const rows = Math.max(1, Math.floor(img.naturalHeight / frameH));
+  const frames: Record<string, AtlasFrame> = {};
+  let idx = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      frames[`auto_${idx.toString().padStart(3, "0")}`] = {
+        name: `auto_${idx}`,
+        x: c * frameW,
+        y: r * frameH,
+        w: frameW,
+        h: frameH,
+      };
+      idx++;
+    }
+  }
+  return frames;
+}
+
+async function loadKenneyAtlas(pngUrl: string, xmlUrl: string, gridFallback?: { w: number; h: number }): Promise<Atlas> {
+  const image = await loadImage(pngUrl);
+  const xmlText = await tryFetchText(xmlUrl);
+  const frames = xmlText ? parseKenneyXml(xmlText) :
+    makeGridFrames(image, gridFallback?.w ?? 128, gridFallback?.h ?? 128);
+  return { image, frames };
+}
+
+function firstBySubstring(frames: Record<string, AtlasFrame>, substr: string): AtlasFrame | undefined {
+  const lc = substr.toLowerCase();
+  for (const k of Object.keys(frames)) {
+    if (k.toLowerCase().includes(lc)) return frames[k];
+  }
+  return undefined;
+}
+
+function nthFrame(frames: Record<string, AtlasFrame>, n: number, filterSubstr?: string): AtlasFrame | undefined {
+  const keys = Object.keys(frames).filter(k => !filterSubstr || k.toLowerCase().includes(filterSubstr.toLowerCase())).sort();
+  return frames[keys[n]];
+}
+
+// ----------------------------------------------------------------------------
+
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const lastCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Skins
+  const backtilesAtlasRef = useRef<Atlas | null>(null);
+  const tilesBlackAtlasRef = useRef<Atlas | null>(null);
+  const [atlasesReady, setAtlasesReady] = useState(false);
 
   const CELL = 48;
   const WIDTH = 6;
@@ -35,6 +125,30 @@ export default function App() {
     hasWon: false,
     hasLost: false,
   });
+
+  // Load Kenney atlases once
+  useEffect(() => {
+    (async () => {
+      try {
+        const back = await loadKenneyAtlas(
+          backtilesPng,
+          backtilesXmlUrl, 
+          { w: 128, h: 128 }
+        );
+        const gems = await loadKenneyAtlas(
+          tilesBlackPng,
+          tilesBlackXmlUrl,
+          { w: 128, h: 128 }
+        );
+        backtilesAtlasRef.current = back;
+        tilesBlackAtlasRef.current = gems;
+        setAtlasesReady(true);
+      } catch (e) {
+        console.error("Failed to load Kenney atlases", e);
+        setAtlasesReady(false);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -91,6 +205,64 @@ export default function App() {
         engineRef.current.update(dt);
         const s = engineRef.current.getState();
 
+        // ---- Build skins (background + foreground) when atlases are ready ----
+        let bgSkin: Skin | undefined;
+        let fgSkin: Skin | undefined;
+
+        if (atlasesReady && backtilesAtlasRef.current) {
+          const atlas = backtilesAtlasRef.current;
+        
+          // Determine the per-frame size from the atlas (works with XML or grid fallback)
+          const anyFrame = Object.values(atlas.frames)[0];
+          const frameW = anyFrame?.w ?? 128;
+          const frameH = anyFrame?.h ?? 128;
+        
+          // Lock to row 2, col 1 (0-based: row=1, col=0)
+          const BACK_COL = 0;
+          const BACK_ROW = 1;
+          const src: SrcRect = {
+            sx: BACK_COL * frameW,
+            sy: BACK_ROW * frameH,
+            sw: frameW,
+            sh: frameH,
+          };
+        
+          // Always return the same source rect so every cell uses that one backtile
+          bgSkin = {
+            image: atlas.image,
+            pickSrcForCell: () => src,
+          };
+        }        
+
+        if (atlasesReady && tilesBlackAtlasRef.current) {
+          const atlas = tilesBlackAtlasRef.current;
+
+          // Map 5 color indices -> 5 different black “tile” looks.
+          // We look for names containing tile/black or numbered variants; fall back to the first five frames.
+          const keys = Object.keys(atlas.frames).sort();
+          const candidates = keys.filter(k =>
+            /tile|square|gem|diamond|block|black/i.test(k)
+          );
+          const order = (candidates.length >= 5 ? candidates : keys).slice(0, 5);
+
+          const pickByColor = (i: number): SrcRect => {
+            const name = order[Math.max(0, Math.min(order.length - 1, i | 0))];
+            const f = atlas.frames[name];
+            return { sx: f.x, sy: f.y, sw: f.w, sh: f.h };
+          };
+
+          fgSkin = {
+            image: atlas.image,
+            pickSrcForCell: (x, y) => {
+              // not used for fg, but satisfy type:
+              const f = atlas.frames[order[0]];
+              return { sx: f.x, sy: f.y, sw: f.w, sh: f.h };
+            },
+            pickSrcForColor: pickByColor,
+          };
+        }
+
+        // Sticky-cursor guard
         if (
           (s.cursorX === 0 && s.cursorY === 0) &&
           !(lastCursorRef.current.x === 0 && lastCursorRef.current.y === 0)
@@ -100,13 +272,14 @@ export default function App() {
             lastCursorRef.current.y
           );
           const s2 = engineRef.current.getState();
-          drawStateToCanvas(ctx, s2, CELL, dt);
+          drawStateToCanvas(ctx, s2, CELL, dt, bgSkin, fgSkin);
         } else {
-          drawStateToCanvas(ctx, s, CELL, dt);
+          drawStateToCanvas(ctx, s, CELL, dt, bgSkin, fgSkin);
         }
 
         lastCursorRef.current = { x: s.cursorX, y: s.cursorY };
 
+        // HUD: tiles above dashed line
         let tilesAbove = 0;
         if (s.showClearLine) {
           for (let y = 0; y < s.clearLineY; y++) {
@@ -128,6 +301,7 @@ export default function App() {
 
         canvas.style.filter = s.hasWon || s.hasLost ? "blur(3px)" : "none";
       } else {
+        // Title scene: clear
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#0f0f12";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -141,7 +315,7 @@ export default function App() {
       window.removeEventListener("keydown", onKeyDown);
       cancelAnimationFrame(raf);
     };
-  }, [scene]);
+  }, [scene, atlasesReady]);
 
   function startGame() {
     engineRef.current = new Engine(WIDTH, HEIGHT, 5);
@@ -313,6 +487,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* Canvas + overlays */}
         <div style={{ position: "relative", width: WIDTH * CELL }}>
           <canvas
             ref={canvasRef}
