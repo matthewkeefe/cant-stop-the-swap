@@ -54,12 +54,16 @@ function drawGemCell(params: {
   blinkT: number;               // ms, used for flash overlay
   spriteBleed?: number;         // default 1px bleed inset if needed
   insetPx?: number;             // override inset px; default 10% of cellSize clamped to >=2
+  tintColors?: string[];        // if provided, tint gem sprite by this palette
+  isMatched?: boolean;          // only flash if matched
 }) {
   const {
     ctx, v, px, py, cellSize,
     fgSkin, colors, isClearing, blinkT,
     spriteBleed = 1,
     insetPx,
+    tintColors,
+    isMatched,
   } = params;
 
   // Keep pixel-crisp
@@ -72,18 +76,44 @@ function drawGemCell(params: {
   const dw = cellSize - inset * 2;
   const dh = cellSize - inset * 2;
 
+  if (v < 0) {
+    // Do not draw anything for empty cells
+    return;
+  }
   if (fgSkin?.image && fgSkin.image.complete && fgSkin.pickSrcForColor) {
     const raw = fgSkin.pickSrcForColor(v);
     const { sx, sy, sw, sh } = insetSrc(raw, spriteBleed);
-    ctx.drawImage(fgSkin.image, sx, sy, sw, sh, dx, dy, dw, dh);
+    if (tintColors && tintColors[v]) {
+      // Create offscreen canvas for tinting
+      const off = document.createElement('canvas');
+      off.width = dw;
+      off.height = dh;
+      const offCtx = off.getContext('2d');
+      if (offCtx) {
+        // Draw sprite
+        offCtx.drawImage(fgSkin.image, sx, sy, sw, sh, 0, 0, dw, dh);
+        offCtx.globalCompositeOperation = 'source-atop';
+        offCtx.fillStyle = tintColors[v];
+        offCtx.globalAlpha = 0.6; // Adjust tint strength as needed
+        offCtx.fillRect(0, 0, dw, dh);
+        offCtx.globalAlpha = 1.0;
+        offCtx.globalCompositeOperation = 'source-over';
+        // Draw tinted sprite to main canvas
+        ctx.drawImage(off, dx, dy);
+      } else {
+        ctx.drawImage(fgSkin.image, sx, sy, sw, sh, dx, dy, dw, dh);
+      }
+    } else {
+      ctx.drawImage(fgSkin.image, sx, sy, sw, sh, dx, dy, dw, dh);
+    }
   } else {
     // Flat color fallback
     ctx.fillStyle = colors[v] ?? "#888";
     ctx.fillRect(dx, dy, dw, dh);
   }
 
-  // Flash overlay during clearing
-  if (isClearing && blinkT < 200) {
+  // Flash overlay only for matched tiles during clearing
+  if (isClearing && blinkT < 200 && isMatched) {
     ctx.fillStyle = "rgba(255,255,255,0.5)";
     ctx.fillRect(dx, dy, dw, dh);
   }
@@ -109,7 +139,6 @@ export function drawStateToCanvas(
     colors,
     cursorX,
     cursorY,
-    matchMask,
     phase,
     fallPieces,
     showClearLine,
@@ -124,46 +153,25 @@ export function drawStateToCanvas(
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.imageSmoothingEnabled = false;
 
-  // Draw board cell backgrounds first (from backtiles)
-  if (bgSkin?.image && bgSkin.image.complete) {
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const { sx, sy, sw, sh } = bgSkin.pickSrcForCell(x, y);
-        const px = x * cellSize;
-        const py = y * cellSize;
-        ctx.drawImage(
-          bgSkin.image,
-          sx, sy, sw, sh,
-          px + 1, py + 1, cellSize - 2, cellSize - 2
-        );
-      }
-    }
-  } else {
-    // fallback: subtle grid
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
-    for (let y = 0; y <= height; y++) {
-      ctx.beginPath();
-      ctx.moveTo(0, y * cellSize + 0.5);
-      ctx.lineTo(width * cellSize, y * cellSize + 0.5);
-      ctx.stroke();
-    }
-    for (let x = 0; x <= width; x++) {
-      ctx.beginPath();
-      ctx.moveTo(x * cellSize + 0.5, 0);
-      ctx.lineTo(x * cellSize + 0.5, height * cellSize);
-      ctx.stroke();
-    }
-  }
+  // No per-cell clearRect; only clear the canvas once at the start
+
+  const GEM_TINTS = [
+    "#22D3EE", // cyan
+    "#60A5FA", // blue
+    "#A78BFA", // purple
+    "#F472B6", // pink
+    "#F59E0B", // amber
+    "#34D399", // green
+  ];
 
   // Draw gems/blocks in grid
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const v = grid[y][x];
       if (v < 0) continue;
-
       const px = x * cellSize;
       const py = y * cellSize;
-
+      const isMatched = !!(state.matchMask && state.matchMask[y] && state.matchMask[y][x]);
       drawGemCell({
         ctx,
         v,
@@ -175,6 +183,8 @@ export function drawStateToCanvas(
         isClearing: phase === "clearing",
         blinkT,
         spriteBleed: 1, // set to 0 if your atlas has built-in padding
+        tintColors: GEM_TINTS,
+        isMatched,
       });
     }
   }

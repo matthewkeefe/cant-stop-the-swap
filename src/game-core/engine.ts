@@ -73,9 +73,19 @@ export class Engine {
 
   setStartingLines(n: number) {
     const rows = Math.max(0, Math.min(n, this.height));
+  console.log('[Engine] setStartingLines called');
     for (let y = this.height - 1; y >= this.height - rows; y--) {
       for (let x = 0; x < this.width; x++) {
-        this.grid[y][x] = this.randColorIndex();
+        let color;
+        let tries = 0;
+        do {
+          color = this.randColorIndex();
+          tries++;
+        } while (
+          (x >= 2 && color === this.grid[y][x - 1] && color === this.grid[y][x - 2]) ||
+          (y <= this.height - 3 && color === this.grid[y + 1][x] && color === this.grid[y + 2][x])
+        && tries < 10);
+        this.grid[y][x] = color;
       }
     }
   }
@@ -259,6 +269,7 @@ export class Engine {
   }
 
   private startSettlingAnimation() {
+  console.log('[Engine] startSettlingAnimation called');
     this.fallPieces = [];
     for (let x = 0; x < this.width; x++) {
       const col: { color: number; fromY: number }[] = [];
@@ -276,7 +287,7 @@ export class Engine {
         }
         writeY--;
       }
-      for (let y = writeY; y >= 0; y--) this.grid[y][x] = -1;
+      // Do NOT clear all cells above the last gem; leave them as-is
     }
     this.phase = "settling";
   }

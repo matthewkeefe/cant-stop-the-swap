@@ -80,19 +80,6 @@ async function loadKenneyAtlas(pngUrl: string, xmlUrl: string, gridFallback?: { 
   return { image, frames };
 }
 
-function firstBySubstring(frames: Record<string, AtlasFrame>, substr: string): AtlasFrame | undefined {
-  const lc = substr.toLowerCase();
-  for (const k of Object.keys(frames)) {
-    if (k.toLowerCase().includes(lc)) return frames[k];
-  }
-  return undefined;
-}
-
-function nthFrame(frames: Record<string, AtlasFrame>, n: number, filterSubstr?: string): AtlasFrame | undefined {
-  const keys = Object.keys(frames).filter(k => !filterSubstr || k.toLowerCase().includes(filterSubstr.toLowerCase())).sort();
-  return frames[keys[n]];
-}
-
 // ----------------------------------------------------------------------------
 
 export default function App() {
@@ -128,6 +115,7 @@ export default function App() {
 
   // Load Kenney atlases once
   useEffect(() => {
+  console.log('[App] useEffect running. scene:', scene, 'atlasesReady:', atlasesReady);
     (async () => {
       try {
         const back = await loadKenneyAtlas(
@@ -156,12 +144,16 @@ export default function App() {
     canvas.height = HEIGHT * CELL;
 
     const onKeyDown = (e: KeyboardEvent) => {
+    console.log('[App] KeyDown:', e.key, 'scene:', scene);
       if (scene === "title") {
-        if (e.key === "Enter") startGame();
+        if (e.key === "Enter") {
+          startGame();
+        }
         return;
       }
       if (!engineRef.current) return;
 
+      // Only call startGame for R (reset), not for swap actions
       switch (e.key) {
         case "ArrowLeft":
           engineRef.current.moveCursor(-1, 0);
@@ -178,6 +170,8 @@ export default function App() {
         case "z":
         case "Z":
         case " ":
+        case "Space":
+          e.preventDefault();
           engineRef.current.swap();
           break;
         case "x":
@@ -187,6 +181,9 @@ export default function App() {
         case "r":
         case "R":
           startGame();
+          break;
+        default:
+          // Do nothing for other keys
           break;
       }
     };
@@ -253,7 +250,7 @@ export default function App() {
 
           fgSkin = {
             image: atlas.image,
-            pickSrcForCell: (x, y) => {
+            pickSrcForCell: () => {
               // not used for fg, but satisfy type:
               const f = atlas.frames[order[0]];
               return { sx: f.x, sy: f.y, sw: f.w, sh: f.h };
