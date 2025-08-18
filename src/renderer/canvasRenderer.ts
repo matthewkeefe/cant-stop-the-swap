@@ -54,7 +54,6 @@ function drawGemCell(params: {
   blinkT: number;               // ms, used for flash overlay
   spriteBleed?: number;         // default 1px bleed inset if needed
   insetPx?: number;             // override inset px; default 10% of cellSize clamped to >=2
-  tintColors?: string[];        // if provided, tint gem sprite by this palette
   isMatched?: boolean;          // only flash if matched
 }) {
   const {
@@ -62,7 +61,6 @@ function drawGemCell(params: {
     fgSkin, colors, isClearing, blinkT,
     spriteBleed = 1,
     insetPx,
-    tintColors,
     isMatched,
   } = params;
 
@@ -83,29 +81,8 @@ function drawGemCell(params: {
   if (fgSkin?.image && fgSkin.image.complete && fgSkin.pickSrcForColor) {
     const raw = fgSkin.pickSrcForColor(v);
     const { sx, sy, sw, sh } = insetSrc(raw, spriteBleed);
-    if (tintColors && tintColors[v]) {
-      // Create offscreen canvas for tinting
-      const off = document.createElement('canvas');
-      off.width = dw;
-      off.height = dh;
-      const offCtx = off.getContext('2d');
-      if (offCtx) {
-        // Draw sprite
-        offCtx.drawImage(fgSkin.image, sx, sy, sw, sh, 0, 0, dw, dh);
-        offCtx.globalCompositeOperation = 'source-atop';
-        offCtx.fillStyle = tintColors[v];
-        offCtx.globalAlpha = 0.6; // Adjust tint strength as needed
-        offCtx.fillRect(0, 0, dw, dh);
-        offCtx.globalAlpha = 1.0;
-        offCtx.globalCompositeOperation = 'source-over';
-        // Draw tinted sprite to main canvas
-        ctx.drawImage(off, dx, dy);
-      } else {
-        ctx.drawImage(fgSkin.image, sx, sy, sw, sh, dx, dy, dw, dh);
-      }
-    } else {
-      ctx.drawImage(fgSkin.image, sx, sy, sw, sh, dx, dy, dw, dh);
-    }
+  // Always draw the original sprite, no tint overlay
+  ctx.drawImage(fgSkin.image, sx, sy, sw, sh, dx, dy, dw, dh);
   } else {
     // Flat color fallback
     ctx.fillStyle = colors[v] ?? "#888";
@@ -155,15 +132,6 @@ export function drawStateToCanvas(
 
   // No per-cell clearRect; only clear the canvas once at the start
 
-  const GEM_TINTS = [
-    "#22D3EE", // cyan
-    "#60A5FA", // blue
-    "#A78BFA", // purple
-    "#F472B6", // pink
-    "#F59E0B", // amber
-    "#34D399", // green
-  ];
-
   // Draw gems/blocks in grid
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -183,7 +151,6 @@ export function drawStateToCanvas(
         isClearing: phase === "clearing",
         blinkT,
         spriteBleed: 1, // set to 0 if your atlas has built-in padding
-        tintColors: GEM_TINTS,
         isMatched,
       });
     }

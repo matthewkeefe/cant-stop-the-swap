@@ -173,8 +173,7 @@ export class Engine {
               : this.chainMultTable[this.chainMultTable.length - 1];
           this.score += tilesCleared * mult;
 
-          // Every 6 gems cleared = 1 line
-          const lineEq = Math.floor(tilesCleared / 6);
+          const lineEq = Math.floor(tilesCleared / this.width);
           if (lineEq > 0) this.linesClearedEq += lineEq;
 
           if (!this.showClearLine && this.linesClearedEq >= this.targetLines) {

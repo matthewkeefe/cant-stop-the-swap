@@ -97,7 +97,7 @@ export default function App() {
   const [scene, setScene] = useState<"title" | "play">("title");
   const [inputs, setInputs] = useState({
     startLines: 5,
-    targetLines: 10,
+    targetLines: 5,
     preset: "Normal" as PresetKey,
     rate: PRESETS["Normal"],
   });
@@ -227,13 +227,10 @@ export default function App() {
           const atlas = tilesBlackAtlasRef.current;
 
           // Map 5 color indices -> 5 different “tile” looks.
-          // We look for names containing tile/black or numbered variants; fall back to the first five frames.
           const keys = Object.keys(atlas.frames).sort();
-          const candidates = keys.filter(k =>
-            /heart_color|star5_color|pentagon_color|diamond_color/i.test(k)
-          );
+          const candidates = keys.filter(k => /_color/i.test(k));
           const order = (candidates.length >= 5 ? candidates : keys).slice(0, 5);
-
+          
           const pickByColor = (i: number): SrcRect => {
             const name = order[Math.max(0, Math.min(order.length - 1, i | 0))];
             const f = atlas.frames[name];
@@ -334,182 +331,207 @@ export default function App() {
     }));
   };
 
+  // game framework 
   return (
     <div
       style={{
         minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
+        width: "100vw",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "flex-start",
         background: "#0b0b0e",
         color: "#cbd5e1",
         fontFamily: "ui-sans-serif, system-ui",
         padding: 16,
+        boxSizing: "border-box",
       }}
     >
-      <div style={{ display: "grid", gap: 16, alignItems: "start" }}>
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100%",
+      }}>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
             gap: 16,
             alignItems: "start",
-            width: WIDTH * CELL + 280,
-            maxWidth: "90vw",
           }}
         >
-          <div>
-            <h2 style={{ margin: "0 0 8px 0" }}>Prism Grid</h2>
-
-            {scene === "title" ? (
-              <p style={{ marginTop: 0, opacity: 0.9 }}>
-                Set your options, then press <strong>Enter</strong> or click{" "}
-                <strong>Start</strong>.
-              </p>
-            ) : (
-              <div style={{ fontSize: 14, opacity: 0.9 }}>
-                <div>Score: <strong>{hud.score}</strong></div>
-                <div>Matches (incl. chains): <strong>{hud.matches}</strong></div>
-                <div>Current chain: <strong>x{Math.max(1, hud.chains)}</strong></div>
-                <div>
-                  Lines cleared (eq): <strong>{hud.linesEq}</strong> /{" "}
-                  <strong>{inputs.targetLines}</strong>
-                </div>
-                <div>Tiles above line: <strong>{hud.tilesAbove}</strong></div>
-              </div>
-            )}
-          </div>
-
-          <div style={{ fontSize: 14 }}>
-            <div style={{ marginBottom: 8 }}>
-              <label style={{ display: "block", marginBottom: 6 }}>
-                Starting lines (bottom):{" "}
-                <input
-                  type="number"
-                  min={0}
-                  max={HEIGHT - 1}
-                  step={1}
-                  value={inputs.startLines}
-                  onChange={(e) =>
-                    setInputs((p) => ({
-                      ...p,
-                      startLines: Math.max(
-                        0,
-                        Math.min(HEIGHT - 1, parseInt(e.target.value || "0", 10))
-                      ),
-                    }))
-                  }
-                  style={{ width: 80 }}
-                />
-              </label>
-
-              <label style={{ display: "block", marginBottom: 6 }}>
-                Target lines (to show dashed line):{" "}
-                <input
-                  type="number"
-                  min={1}
-                  max={99}
-                  step={1}
-                  value={inputs.targetLines}
-                  onChange={(e) =>
-                    setInputs((p) => ({
-                      ...p,
-                      targetLines: Math.max(1, parseInt(e.target.value || "0", 10)),
-                    }))
-                  }
-                  style={{ width: 80 }}
-                />
-              </label>
-
-              <label style={{ display: "block", marginBottom: 6 }}>
-                Rise preset:&nbsp;
-                <select
-                  value={inputs.preset}
-                  onChange={(e) => onPresetChange(e.target.value as PresetKey)}
-                >
-                  <option>Easy</option>
-                  <option>Normal</option>
-                  <option>Hard</option>
-                  <option>Custom</option>
-                </select>
-              </label>
-
-              <label style={{ display: "block" }}>
-                Rise rate (rows/sec):{" "}
-                <input
-                  type="number"
-                  min={0}
-                  max={5}
-                  step={0.05}
-                  value={
-                    inputs.preset === "Custom"
-                      ? inputs.rate
-                      : PRESETS[inputs.preset]
-                  }
-                  onChange={(e) =>
-                    setInputs((p) => ({
-                      ...p,
-                      rate: parseFloat(e.target.value || "0"),
-                      preset: "Custom",
-                    }))
-                  }
-                  style={{ width: 80 }}
-                  disabled={inputs.preset !== "Custom"}
-                />
-              </label>
-            </div>
-
-            {scene === "play" ? (
-              <div>
-                <button onClick={() => startGame()}>Reset</button>
-                <p style={{ marginTop: 8, opacity: 0.8 }}>
-                  Controls: Arrows = move • Z/Space = swap • X = raise • R = reset
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 16,
+              alignItems: "start",
+              width: WIDTH * CELL + 280,
+              maxWidth: "90vw",
+            }}
+          >
+            <div>
+              <h2 style={{ margin: "0 0 8px 0" }}>Prism Grid</h2>
+              {scene === "title" ? (
+                <p style={{ marginTop: 0, opacity: 0.9 }}>
+                  Set your options, then press <strong>Enter</strong> or click <strong>Start</strong>.
                 </p>
-              </div>
-            ) : (
-              <div>
-                <button onClick={() => startGame()}>Start</button>
-                <p style={{ marginTop: 8, opacity: 0.8 }}>
-                  Press <strong>Enter</strong> to start.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Canvas + overlays */}
-        <div style={{ position: "relative", width: WIDTH * CELL }}>
-          <canvas
-            ref={canvasRef}
-            width={WIDTH * CELL}
-            height={HEIGHT * CELL}
-            style={{ borderRadius: 8 }}
-          />
-          {scene === "play" && (hud.hasWon || hud.hasLost) && (
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "grid",
-                placeItems: "center",
-                color: "#fff",
-                textShadow: "0 2px 8px rgba(0,0,0,0.6)",
-                fontWeight: 700,
-                fontSize: 32,
-                letterSpacing: 1,
-              }}
-            >
-              <div
-                style={{
-                  padding: "12px 16px",
-                  borderRadius: 8,
-                  background: "rgba(0,0,0,0.5)",
-                  border: "1px solid rgba(255,255,255,0.2)",
+              ) : null}
+              {/* Game grid and overlays */}
+              <div 
+                style={{ 
+                  position: "relative", 
+                  width: WIDTH * CELL, 
+                  border: "2px solid #888", 
+                  backgroundColor: "#0f0f12", 
+                  borderRadius: 8 
                 }}
               >
-                {hud.hasWon ? "You win!" : "You lose!"}
+                <canvas
+                  ref={canvasRef}
+                  width={WIDTH * CELL}
+                  height={HEIGHT * CELL}
+                  style={{ borderRadius: 8 }}
+                />
+                {scene === "play" && (hud.hasWon || hud.hasLost) && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "grid",
+                      placeItems: "center",
+                      color: "#fff",
+                      textShadow: "0 2px 8px rgba(0,0,0,0.6)",
+                      fontWeight: 700,
+                      fontSize: 32,
+                      letterSpacing: 1,
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "12px 16px",
+                        borderRadius: 8,
+                        background: "rgba(0,0,0,0.5)",
+                        border: "1px solid rgba(255,255,255,0.2)",
+                      }}
+                    >
+                      {hud.hasWon ? "You win!" : "You lose!"}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
+
+            <div style={{ fontSize: 14 }}>
+              {/* Score HUD moved above settings */}
+              {scene === "play" && (
+                <div style={{ fontSize: 14, opacity: 0.9, marginBottom: 16 }}>
+                  <div>Score: <strong>{hud.score}</strong></div>
+                  <div>Matches (incl. chains): <strong>{hud.matches}</strong></div>
+                  <div>Current chain: <strong>x{Math.max(1, hud.chains)}</strong></div>
+                  <div>
+                    Lines cleared (eq): <strong>{hud.linesEq}</strong> /{" "}
+                    <strong>{inputs.targetLines}</strong>
+                  </div>
+                  <div>Tiles above line: <strong>{hud.tilesAbove}</strong></div>
+                </div>
+              )}
+              <div style={{ marginBottom: 8 }}>
+                <label style={{ display: "block", marginBottom: 6 }}>
+                  Starting lines (bottom):{" "}
+                  <input
+                    type="number"
+                    min={0}
+                    max={HEIGHT - 1}
+                    step={1}
+                    value={inputs.startLines}
+                    onChange={(e) =>
+                      setInputs((p) => ({
+                        ...p,
+                        startLines: Math.max(
+                          0,
+                          Math.min(HEIGHT - 1, parseInt(e.target.value || "0", 5))
+                        ),
+                      }))
+                    }
+                    style={{ width: 80 }}
+                  />
+                </label>
+
+                <label style={{ display: "block", marginBottom: 6 }}>
+                  Target lines (win):{" "}
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    step={1}
+                    value={inputs.targetLines}
+                    onChange={(e) =>
+                      setInputs((p) => ({
+                        ...p,
+                        targetLines: Math.max(1, parseInt(e.target.value || "0", 5)),
+                      }))
+                    }
+                    style={{ width: 80 }}
+                  />
+                </label>
+
+                <label style={{ display: "block", marginBottom: 6 }}>
+                  Rise preset:&nbsp;
+                  <select
+                    value={inputs.preset}
+                    onChange={(e) => onPresetChange(e.target.value as PresetKey)}
+                  >
+                    <option>Easy</option>
+                    <option>Normal</option>
+                    <option>Hard</option>
+                    <option>Custom</option>
+                  </select>
+                </label>
+
+                <label style={{ display: "block" }}>
+                  Rise rate (rows/sec):{" "}
+                  <input
+                    type="number"
+                    min={0}
+                    max={5}
+                    step={0.05}
+                    value={
+                      inputs.preset === "Custom"
+                        ? inputs.rate
+                        : PRESETS[inputs.preset]
+                    }
+                    onChange={(e) =>
+                      setInputs((p) => ({
+                        ...p,
+                        rate: parseFloat(e.target.value || "0"),
+                        preset: "Custom",
+                      }))
+                    }
+                    style={{ width: 80 }}
+                    disabled={inputs.preset !== "Custom"}
+                  />
+                </label>
+              </div>
+
+              {scene === "play" ? (
+                <div>
+                  <button onClick={() => startGame()}>Reset</button>
+                  <p style={{ marginTop: 8, opacity: 0.8 }}>
+                    Controls: Arrows = move • Z/Space = swap • X = raise • R = reset
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <button onClick={() => startGame()}>Start</button>
+                  <p style={{ marginTop: 8, opacity: 0.8 }}>
+                    Press <strong>Enter</strong> to start.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
