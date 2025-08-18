@@ -2,16 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { Engine } from "./game-core/engine";
 import { drawStateToCanvas, type Skin, type SrcRect } from "./renderer/canvasRenderer";
 
-import backtilesPng from "./assets/kenney/spritesheet_backtiles.png";
-import backtilesXmlUrl from "./assets/kenney/spritesheet_backtiles.xml?url";
-import tilesBlackPng from "./assets/kenney/spritesheet_tilesBlack.png";
-import tilesBlackXmlUrl from "./assets/kenney/spritesheet_tilesBlack.xml?url";
+import tilesGemsPng from "./assets/sprites/gems.png";
+import tilesGemsXmlUrl from "./assets/sprites/gems.xml?url";
 
 type PresetKey = "Easy" | "Normal" | "Hard" | "Custom";
 const PRESETS: Record<PresetKey, number> = {
-  Easy: 0.40,
-  Normal: 0.60,
-  Hard: 0.90,
+  Easy: 0.20,
+  Normal: 0.50,
+  Hard: 0.80,
   Custom: 0,
 };
 
@@ -37,7 +35,7 @@ async function tryFetchText(url: string): Promise<string | null> {
   }
 }
 
-function parseKenneyXml(xmlText: string): Record<string, AtlasFrame> {
+function parseGemsXml(xmlText: string): Record<string, AtlasFrame> {
   const doc = new DOMParser().parseFromString(xmlText, "application/xml");
   const result: Record<string, AtlasFrame> = {};
   doc.querySelectorAll("SubTexture").forEach((el) => {
@@ -72,10 +70,10 @@ function makeGridFrames(img: HTMLImageElement, frameW: number, frameH: number): 
   return frames;
 }
 
-async function loadKenneyAtlas(pngUrl: string, xmlUrl: string, gridFallback?: { w: number; h: number }): Promise<Atlas> {
+async function loadGemsAtlas(pngUrl: string, xmlUrl: string, gridFallback?: { w: number; h: number }): Promise<Atlas> {
   const image = await loadImage(pngUrl);
   const xmlText = await tryFetchText(xmlUrl);
-  const frames = xmlText ? parseKenneyXml(xmlText) :
+  const frames = xmlText ? parseGemsXml(xmlText) :
     makeGridFrames(image, gridFallback?.w ?? 128, gridFallback?.h ?? 128);
   return { image, frames };
 }
@@ -115,24 +113,18 @@ export default function App() {
 
   // Load Kenney atlases once
   useEffect(() => {
-  console.log('[App] useEffect running. scene:', scene, 'atlasesReady:', atlasesReady);
+  //console.log('[App] useEffect running. scene:', scene, 'atlasesReady:', atlasesReady);
     (async () => {
       try {
-        const back = await loadKenneyAtlas(
-          backtilesPng,
-          backtilesXmlUrl, 
+        const gems = await loadGemsAtlas(
+          tilesGemsPng,
+          tilesGemsXmlUrl,
           { w: 128, h: 128 }
         );
-        const gems = await loadKenneyAtlas(
-          tilesBlackPng,
-          tilesBlackXmlUrl,
-          { w: 128, h: 128 }
-        );
-        backtilesAtlasRef.current = back;
         tilesBlackAtlasRef.current = gems;
         setAtlasesReady(true);
       } catch (e) {
-        console.error("Failed to load Kenney atlases", e);
+        console.error("Failed to load gems atlases", e);
         setAtlasesReady(false);
       }
     })();
@@ -144,7 +136,7 @@ export default function App() {
     canvas.height = HEIGHT * CELL;
 
     const onKeyDown = (e: KeyboardEvent) => {
-    console.log('[App] KeyDown:', e.key, 'scene:', scene);
+    //console.log('[App] KeyDown:', e.key, 'scene:', scene);
       if (scene === "title") {
         if (e.key === "Enter") {
           startGame();
@@ -234,11 +226,11 @@ export default function App() {
         if (atlasesReady && tilesBlackAtlasRef.current) {
           const atlas = tilesBlackAtlasRef.current;
 
-          // Map 5 color indices -> 5 different black “tile” looks.
+          // Map 5 color indices -> 5 different “tile” looks.
           // We look for names containing tile/black or numbered variants; fall back to the first five frames.
           const keys = Object.keys(atlas.frames).sort();
           const candidates = keys.filter(k =>
-            /tile|square|gem|diamond|block|black/i.test(k)
+            /heart_color|star5_color|pentagon_color|diamond_color/i.test(k)
           );
           const order = (candidates.length >= 5 ? candidates : keys).slice(0, 5);
 

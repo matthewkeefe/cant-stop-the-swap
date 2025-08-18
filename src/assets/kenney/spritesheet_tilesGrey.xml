@@ -1,24 +1,24 @@
 <TextureAtlas imagePath="sprites.png">
-	<SubTexture name="tileGrey_01.png" x="905" y="1134" width="128" height="128"/>
+	<SubTexture name="tileGrey_01_square.png" x="905" y="1134" width="128" height="128"/>
 	<SubTexture name="tileGrey_02.png" x="0" y="530" width="188" height="88"/>
 	<SubTexture name="tileGrey_03.png" x="0" y="1180" width="88" height="88"/>
-	<SubTexture name="tileGrey_04.png" x="1035" y="1134" width="128" height="128"/>
+	<SubTexture name="tileGrey_04_star4.png" x="1035" y="1134" width="128" height="128"/>
 	<SubTexture name="tileGrey_05.png" x="1036" y="390" width="128" height="128"/>
-	<SubTexture name="tileGrey_06.png" x="1035" y="1004" width="128" height="128"/>
+	<SubTexture name="tileGrey_06_star5.png" x="1035" y="1004" width="128" height="128"/>
 	<SubTexture name="tileGrey_07.png" x="1035" y="874" width="128" height="128"/>
-	<SubTexture name="tileGrey_08.png" x="1036" y="260" width="128" height="128"/>
+	<SubTexture name="tileGrey_08_star4.png" x="1036" y="260" width="128" height="128"/>
 	<SubTexture name="tileGrey_09.png" x="812" y="240" width="129" height="120"/>
-	<SubTexture name="tileGrey_10.png" x="303" y="1166" width="129" height="104"/>
+	<SubTexture name="tileGrey_10_diamond.png" x="303" y="1166" width="129" height="104"/>
 	<SubTexture name="tileGrey_11.png" x="905" y="614" width="129" height="128"/>
 	<SubTexture name="tileGrey_12.png" x="812" y="0" width="130" height="118"/>
-	<SubTexture name="tileGrey_13.png" x="944" y="130" width="128" height="128"/>
+	<SubTexture name="tileGrey_13_pentagon.png" x="944" y="130" width="128" height="128"/>
 	<SubTexture name="tileGrey_14.png" x="0" y="440" width="188" height="88"/>
 	<SubTexture name="tileGrey_15.png" x="943" y="260" width="88" height="88"/>
 	<SubTexture name="tileGrey_16.png" x="1035" y="744" width="128" height="128"/>
 	<SubTexture name="tileGrey_17.png" x="944" y="0" width="128" height="128"/>
 	<SubTexture name="tileGrey_18.png" x="905" y="1004" width="128" height="128"/>
 	<SubTexture name="tileGrey_19.png" x="905" y="744" width="128" height="128"/>
-	<SubTexture name="tileGrey_20.png" x="905" y="874" width="128" height="128"/>
+	<SubTexture name="tileGrey_20_star4.png" x="905" y="874" width="128" height="128"/>
 	<SubTexture name="tileGrey_21.png" x="905" y="492" width="129" height="120"/>
 	<SubTexture name="tileGrey_22.png" x="434" y="1166" width="129" height="104"/>
 	<SubTexture name="tileGrey_23.png" x="905" y="362" width="129" height="128"/>

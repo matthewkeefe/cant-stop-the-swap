@@ -48,7 +48,7 @@ export class Engine {
   score = 0;
   matchesTotal = 0;
   linesClearedEq = 0;
-  targetLines = 10;
+  targetLines = 5;
   autoRiseRateRowsPerSec = 0.6;
   riseAccumRows = 0;
   clearLineY: number;
@@ -69,11 +69,14 @@ export class Engine {
     );
     this.matchMask = this.blankMask();
     this.clearLineY = Math.floor(this.height * 0.5);
+    // Start cursor in the middle of the board
+    this.cursorX = Math.floor((this.width - 2) / 2);
+    this.cursorY = Math.floor(this.height / 2);
   }
 
   setStartingLines(n: number) {
     const rows = Math.max(0, Math.min(n, this.height));
-  console.log('[Engine] setStartingLines called');
+    //console.log('[Engine] setStartingLines called');
     for (let y = this.height - 1; y >= this.height - rows; y--) {
       for (let x = 0; x < this.width; x++) {
         let color;
@@ -170,7 +173,8 @@ export class Engine {
               : this.chainMultTable[this.chainMultTable.length - 1];
           this.score += tilesCleared * mult;
 
-          const lineEq = Math.floor(tilesCleared / this.width);
+          // Every 6 gems cleared = 1 line
+          const lineEq = Math.floor(tilesCleared / 6);
           if (lineEq > 0) this.linesClearedEq += lineEq;
 
           if (!this.showClearLine && this.linesClearedEq >= this.targetLines) {
@@ -269,7 +273,7 @@ export class Engine {
   }
 
   private startSettlingAnimation() {
-  console.log('[Engine] startSettlingAnimation called');
+    //console.log('[Engine] startSettlingAnimation called');
     this.fallPieces = [];
     for (let x = 0; x < this.width; x++) {
       const col: { color: number; fromY: number }[] = [];
