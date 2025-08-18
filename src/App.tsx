@@ -1,82 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { Engine } from "./game-core/engine";
-import { drawStateToCanvas, type Skin, type SrcRect } from "./renderer/canvasRenderer";
+
+const DEFAULT_TOTAL_LEVEL_LINES = 7;
+import {
+  drawStateToCanvas,
+  type Skin,
+  type SrcRect,
+} from "./renderer/canvasRenderer";
 
 import tilesGemsPng from "./assets/sprites/gems.png";
 import tilesGemsXmlUrl from "./assets/sprites/gems.xml?url";
+import { type Atlas, loadGemsAtlas } from "./atlas"; // atlas helpers moved to src/atlas.ts
 
 type PresetKey = "Easy" | "Normal" | "Hard" | "Custom";
 const PRESETS: Record<PresetKey, number> = {
-  Easy: 0.20,
-  Normal: 0.50,
-  Hard: 0.80,
+  Easy: 0.2,
+  Normal: 0.5,
+  Hard: 0.8,
   Custom: 0,
 };
-
-// ---- Kenney atlas helpers (PNG + XML; with grid fallback if XML missing) ----
-type AtlasFrame = { name: string; x: number; y: number; w: number; h: number };
-type Atlas = { image: HTMLImageElement; frames: Record<string, AtlasFrame> };
-
-async function loadImage(url: string): Promise<HTMLImageElement> {
-  const img = new Image();
-  img.decoding = "async";
-  img.src = url;
-  await img.decode();
-  return img;
-}
-
-async function tryFetchText(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    return await res.text();
-  } catch {
-    return null;
-  }
-}
-
-function parseGemsXml(xmlText: string): Record<string, AtlasFrame> {
-  const doc = new DOMParser().parseFromString(xmlText, "application/xml");
-  const result: Record<string, AtlasFrame> = {};
-  doc.querySelectorAll("SubTexture").forEach((el) => {
-    const name = el.getAttribute("name") || "";
-    const x = parseInt(el.getAttribute("x") || "0", 10);
-    const y = parseInt(el.getAttribute("y") || "0", 10);
-    const w = parseInt(el.getAttribute("width") || "0", 10);
-    const h = parseInt(el.getAttribute("height") || "0", 10);
-    result[name] = { name, x, y, w, h };
-  });
-  return result;
-}
-
-/** If no XML: slice the sheet into a grid (tweakable). */
-function makeGridFrames(img: HTMLImageElement, frameW: number, frameH: number): Record<string, AtlasFrame> {
-  const cols = Math.max(1, Math.floor(img.naturalWidth / frameW));
-  const rows = Math.max(1, Math.floor(img.naturalHeight / frameH));
-  const frames: Record<string, AtlasFrame> = {};
-  let idx = 0;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      frames[`auto_${idx.toString().padStart(3, "0")}`] = {
-        name: `auto_${idx}`,
-        x: c * frameW,
-        y: r * frameH,
-        w: frameW,
-        h: frameH,
-      };
-      idx++;
-    }
-  }
-  return frames;
-}
-
-async function loadGemsAtlas(pngUrl: string, xmlUrl: string, gridFallback?: { w: number; h: number }): Promise<Atlas> {
-  const image = await loadImage(pngUrl);
-  const xmlText = await tryFetchText(xmlUrl);
-  const frames = xmlText ? parseGemsXml(xmlText) :
-    makeGridFrames(image, gridFallback?.w ?? 128, gridFallback?.h ?? 128);
-  return { image, frames };
-}
 
 // ----------------------------------------------------------------------------
 
@@ -96,8 +38,9 @@ export default function App() {
 
   const [scene, setScene] = useState<"title" | "play">("title");
   const [inputs, setInputs] = useState({
-    startLines: 5,
+    totalLines: DEFAULT_TOTAL_LEVEL_LINES,
     targetLines: 5,
+    startingLines: 5,
     preset: "Normal" as PresetKey,
     rate: PRESETS["Normal"],
   });
@@ -113,14 +56,13 @@ export default function App() {
 
   // Load Kenney atlases once
   useEffect(() => {
-  //console.log('[App] useEffect running. scene:', scene, 'atlasesReady:', atlasesReady);
+    //console.log('[App] useEffect running. scene:', scene, 'atlasesReady:', atlasesReady);
     (async () => {
       try {
-        const gems = await loadGemsAtlas(
-          tilesGemsPng,
-          tilesGemsXmlUrl,
-          { w: 128, h: 128 }
-        );
+        const gems = await loadGemsAtlas(tilesGemsPng, tilesGemsXmlUrl, {
+          w: 128,
+          h: 128,
+        });
         tilesBlackAtlasRef.current = gems;
         setAtlasesReady(true);
       } catch (e) {
@@ -136,7 +78,7 @@ export default function App() {
     canvas.height = HEIGHT * CELL;
 
     const onKeyDown = (e: KeyboardEvent) => {
-    //console.log('[App] KeyDown:', e.key, 'scene:', scene);
+      //console.log('[App] KeyDown:', e.key, 'scene:', scene);
       if (scene === "title") {
         if (e.key === "Enter") {
           startGame();
@@ -200,12 +142,12 @@ export default function App() {
 
         if (atlasesReady && backtilesAtlasRef.current) {
           const atlas = backtilesAtlasRef.current;
-        
+
           // Determine the per-frame size from the atlas (works with XML or grid fallback)
           const anyFrame = Object.values(atlas.frames)[0];
           const frameW = anyFrame?.w ?? 128;
           const frameH = anyFrame?.h ?? 128;
-        
+
           // Lock to row 2, col 1 (0-based: row=1, col=0)
           const BACK_COL = 0;
           const BACK_ROW = 1;
@@ -215,22 +157,25 @@ export default function App() {
             sw: frameW,
             sh: frameH,
           };
-        
+
           // Always return the same source rect so every cell uses that one backtile
           bgSkin = {
             image: atlas.image,
             pickSrcForCell: () => src,
           };
-        }        
+        }
 
         if (atlasesReady && tilesBlackAtlasRef.current) {
           const atlas = tilesBlackAtlasRef.current;
 
           // Map 5 color indices -> 5 different “tile” looks.
           const keys = Object.keys(atlas.frames).sort();
-          const candidates = keys.filter(k => /_color/i.test(k));
-          const order = (candidates.length >= 5 ? candidates : keys).slice(0, 5);
-          
+          const candidates = keys.filter((k) => /_color/i.test(k));
+          const order = (candidates.length >= 5 ? candidates : keys).slice(
+            0,
+            5
+          );
+
           const pickByColor = (i: number): SrcRect => {
             const name = order[Math.max(0, Math.min(order.length - 1, i | 0))];
             const f = atlas.frames[name];
@@ -250,7 +195,8 @@ export default function App() {
 
         // Sticky-cursor guard
         if (
-          (s.cursorX === 0 && s.cursorY === 0) &&
+          s.cursorX === 0 &&
+          s.cursorY === 0 &&
           !(lastCursorRef.current.x === 0 && lastCursorRef.current.y === 0)
         ) {
           engineRef.current.setCursorAbsolute(
@@ -258,9 +204,25 @@ export default function App() {
             lastCursorRef.current.y
           );
           const s2 = engineRef.current.getState();
-          drawStateToCanvas(ctx, s2, CELL, dt, bgSkin, fgSkin);
+          drawStateToCanvas(
+            ctx,
+            s2,
+            CELL,
+            dt,
+            s2.scrollOffsetPx ?? 0,
+            bgSkin,
+            fgSkin
+          );
         } else {
-          drawStateToCanvas(ctx, s, CELL, dt, bgSkin, fgSkin);
+          drawStateToCanvas(
+            ctx,
+            s,
+            CELL,
+            dt,
+            s.scrollOffsetPx ?? 0,
+            bgSkin,
+            fgSkin
+          );
         }
 
         lastCursorRef.current = { x: s.cursorX, y: s.cursorY };
@@ -309,7 +271,28 @@ export default function App() {
     const useRate =
       inputs.preset === "Custom" ? inputs.rate : PRESETS[inputs.preset];
     engineRef.current.autoRiseRateRowsPerSec = useRate;
-    engineRef.current.setStartingLines(inputs.startLines);
+    // Build prebuilt queue: totalLines + 16 overflow rows
+    const total = Math.max(1, inputs.totalLines || DEFAULT_TOTAL_LEVEL_LINES);
+    const queueLen = total + 16;
+    const rows: number[][] = [];
+    for (let i = 0; i < queueLen; i++) {
+      const row: number[] = [];
+      for (let x = 0; x < WIDTH; x++) {
+        // random color index based on engine palette
+        const colorIndex = Math.floor(
+          Math.random() * engineRef.current.colors.length
+        );
+        row.push(colorIndex);
+      }
+      rows.push(row);
+    }
+    engineRef.current.setLevelQueue(
+      rows,
+      Math.max(0, Math.min(HEIGHT, inputs.startingLines))
+    );
+    // Set the totalLevelLines so engine computes the rising win line; the
+    // engine will add the +16 rows already included above.
+    engineRef.current.totalLevelLines = total;
 
     setScene("play");
     setHud({
@@ -331,7 +314,7 @@ export default function App() {
     }));
   };
 
-  // game framework 
+  // game framework
   return (
     <div
       style={{
@@ -347,13 +330,15 @@ export default function App() {
         boxSizing: "border-box",
       }}
     >
-      <div style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "100%",
-      }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100%",
+        }}
+      >
         <div
           style={{
             display: "grid",
@@ -375,17 +360,19 @@ export default function App() {
               <h2 style={{ margin: "0 0 8px 0" }}>Prism Grid</h2>
               {scene === "title" ? (
                 <p style={{ marginTop: 0, opacity: 0.9 }}>
-                  Set your options, then press <strong>Enter</strong> or click <strong>Start</strong>.
+                  Set your options, then press <strong>Enter</strong> or click{" "}
+                  <strong>Start</strong>.
                 </p>
               ) : null}
               {/* Game grid and overlays */}
-              <div 
-                style={{ 
-                  position: "relative", 
-                  width: WIDTH * CELL, 
-                  border: "2px solid #888", 
-                  backgroundColor: "#0f0f12", 
-                  borderRadius: 8 
+              <div
+                style={{
+                  position: "relative",
+                  width: WIDTH * CELL,
+                  border: "2px solid #888",
+                  backgroundColor: "#0f0f12",
+                  borderRadius: 8,
+                  overflow: "hidden",
                 }}
               >
                 <canvas
@@ -393,6 +380,35 @@ export default function App() {
                   width={WIDTH * CELL}
                   height={HEIGHT * CELL}
                   style={{ borderRadius: 8 }}
+                />
+                {/* Soft fade gradients at top and bottom to mask incoming rows */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    height: CELL,
+                    pointerEvents: "none",
+                    background:
+                      "linear-gradient(to bottom, rgba(11,11,14,1), rgba(11,11,14,0))",
+                    borderTopLeftRadius: 8,
+                    borderTopRightRadius: 8,
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: CELL,
+                    pointerEvents: "none",
+                    background:
+                      "linear-gradient(to top, rgba(11,11,14,1), rgba(11,11,14,0))",
+                    borderBottomLeftRadius: 8,
+                    borderBottomRightRadius: 8,
+                  }}
                 />
                 {scene === "play" && (hud.hasWon || hud.hasLost) && (
                   <div
@@ -427,31 +443,63 @@ export default function App() {
               {/* Score HUD moved above settings */}
               {scene === "play" && (
                 <div style={{ fontSize: 14, opacity: 0.9, marginBottom: 16 }}>
-                  <div>Score: <strong>{hud.score}</strong></div>
-                  <div>Matches (incl. chains): <strong>{hud.matches}</strong></div>
-                  <div>Current chain: <strong>x{Math.max(1, hud.chains)}</strong></div>
+                  <div>
+                    Score: <strong>{hud.score}</strong>
+                  </div>
+                  <div>
+                    Matches (incl. chains): <strong>{hud.matches}</strong>
+                  </div>
+                  <div>
+                    Current chain: <strong>x{Math.max(1, hud.chains)}</strong>
+                  </div>
                   <div>
                     Lines cleared (eq): <strong>{hud.linesEq}</strong> /{" "}
                     <strong>{inputs.targetLines}</strong>
                   </div>
-                  <div>Tiles above line: <strong>{hud.tilesAbove}</strong></div>
+                  <div>
+                    Tiles above line: <strong>{hud.tilesAbove}</strong>
+                  </div>
                 </div>
               )}
               <div style={{ marginBottom: 8 }}>
                 <label style={{ display: "block", marginBottom: 6 }}>
-                  Starting lines (bottom):{" "}
+                  Total Level Lines:
                   <input
                     type="number"
-                    min={0}
-                    max={HEIGHT - 1}
+                    min={1}
+                    max={999}
                     step={1}
-                    value={inputs.startLines}
+                    value={inputs.totalLines}
                     onChange={(e) =>
                       setInputs((p) => ({
                         ...p,
-                        startLines: Math.max(
+                        totalLines: Math.max(
+                          1,
+                          parseInt(e.target.value || "0", 10)
+                        ),
+                      }))
+                    }
+                    style={{ width: 80 }}
+                  />
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>
+                    (Total lines sets the win threshold; +16 lines are added to
+                    the level queue to allow overflow)
+                  </div>
+                </label>
+                <label style={{ display: "block", marginBottom: 6 }}>
+                  Starting lines (visible at start):
+                  <input
+                    type="number"
+                    min={0}
+                    max={HEIGHT}
+                    step={1}
+                    value={inputs.startingLines}
+                    onChange={(e) =>
+                      setInputs((p) => ({
+                        ...p,
+                        startingLines: Math.max(
                           0,
-                          Math.min(HEIGHT - 1, parseInt(e.target.value || "0", 5))
+                          Math.min(HEIGHT, parseInt(e.target.value || "0", 10))
                         ),
                       }))
                     }
@@ -470,7 +518,10 @@ export default function App() {
                     onChange={(e) =>
                       setInputs((p) => ({
                         ...p,
-                        targetLines: Math.max(1, parseInt(e.target.value || "0", 5)),
+                        targetLines: Math.max(
+                          1,
+                          parseInt(e.target.value || "0", 5)
+                        ),
                       }))
                     }
                     style={{ width: 80 }}
@@ -481,7 +532,9 @@ export default function App() {
                   Rise preset:&nbsp;
                   <select
                     value={inputs.preset}
-                    onChange={(e) => onPresetChange(e.target.value as PresetKey)}
+                    onChange={(e) =>
+                      onPresetChange(e.target.value as PresetKey)
+                    }
                   >
                     <option>Easy</option>
                     <option>Normal</option>
@@ -519,7 +572,8 @@ export default function App() {
                 <div>
                   <button onClick={() => startGame()}>Reset</button>
                   <p style={{ marginTop: 8, opacity: 0.8 }}>
-                    Controls: Arrows = move • Z/Space = swap • X = raise • R = reset
+                    Controls: Arrows = move • Z/Space = swap • X = raise • R =
+                    reset
                   </p>
                 </div>
               ) : (

@@ -5,7 +5,7 @@ export type FallPiece = {
   x: number;
   fromY: number;
   toY: number;
-  y: number; 
+  y: number;
   color: number;
 };
 
@@ -30,7 +30,14 @@ export type GameState = {
   showClearLine: boolean;
   hasWon: boolean;
   hasLost: boolean;
+  // fractional upward scroll in pixels (renderer should subtract this)
+  scrollOffsetPx?: number;
+  winLineY?: number;
+  nextRowPreview?: number[];
 };
+
+import type { Mask } from "../mask";
+import { cellTouchesMask } from "../mask";
 
 export class Engine {
   width: number;
@@ -41,10 +48,29 @@ export class Engine {
   cursorY = 0;
   phase: Phase = "idle";
   matchMask: boolean[][];
+  mask?: Mask;
   clearTimerMs = 0;
   chainCount = 0;
   fallPieces: FallPiece[] = [];
   fallSpeedRowsPerSec = 18;
+  // Scrolling config: pixels/sec upward
+  scrollSpeedPxPerSec = 24; // default: half cell/sec for 48px cell
+  // current fractional scroll offset in pixels
+  scrollOffsetPx = 0;
+  // Prebuilt level queue; when empty we insert empty rows
+  levelQueue: number[][] = [];
+  // Win line in pixels from top (renderer coordinate space)
+  // totalLevelLines: will be set by the app (App.tsx). Default 0 so the app
+  // is the single source of truth for this value.
+  totalLevelLines = 0;
+  // How many rows have been inserted from the queue into the visible grid
+  // (including initial visible rows populated by setLevelQueue).
+  rowsInserted = 0;
+  // Mask/contact hook placeholders
+  maskCheckSamples = [0.25, 0.5, 0.75]; // sample fractions across cell width
+  maskImageWidth = 0; // populated if mask provided (mask module gives width)
+  onTopContact?: () => void;
+  onWin?: () => void;
   score = 0;
   matchesTotal = 0;
   linesClearedEq = 0;
@@ -72,6 +98,41 @@ export class Engine {
     // Start cursor in the middle of the board
     this.cursorX = Math.floor((this.width - 2) / 2);
     this.cursorY = Math.floor(this.height / 2);
+    // mask is optional and can be set via setMask()
+  }
+
+  // Provide a prebuilt queue of rows (each row is length = width). Rows are
+  // shifted in order: shiftNextRow() returns the next row to insert at bottom.
+  // rows: queue ordered so that rows[0] is the next row to be inserted at the
+  // bottom. visibleCount (optional) controls how many rows to populate into
+  // the visible grid immediately; the rest remain in this.levelQueue for
+  // future scrolling.
+  setLevelQueue(rows: number[][], visibleCount?: number) {
+    this.levelQueue = rows.slice();
+    const want = visibleCount !== undefined ? Math.max(0, visibleCount | 0) : 0;
+    const temp: number[][] = Array.from({ length: this.height }, () =>
+      Array.from({ length: this.width }, () => -1)
+    );
+    // Fill bottom-up with up to `want` rows from the queue
+    let placed = 0;
+    for (let y = this.height - 1; y >= 0 && placed < want; y--) {
+      if (this.levelQueue.length > 0) {
+        const r = this.levelQueue.shift()!;
+        const row = Array.from({ length: this.width }, () => -1);
+        for (let x = 0; x < Math.min(r.length, this.width); x++) row[x] = r[x];
+        temp[y] = row;
+        placed++;
+      } else break;
+    }
+    this.grid = temp;
+    // Track how many rows we've inserted into the visible grid so far.
+    this.rowsInserted = placed;
+  }
+
+  // Helper to pop next row or return empty row when queue is empty
+  private shiftNextRow(): number[] {
+    if (this.levelQueue.length > 0) return this.levelQueue.shift()!;
+    return Array.from({ length: this.width }, () => -1);
   }
 
   setStartingLines(n: number) {
@@ -85,9 +146,14 @@ export class Engine {
           color = this.randColorIndex();
           tries++;
         } while (
-          (x >= 2 && color === this.grid[y][x - 1] && color === this.grid[y][x - 2]) ||
-          (y <= this.height - 3 && color === this.grid[y + 1][x] && color === this.grid[y + 2][x])
-        && tries < 10);
+          (x >= 2 &&
+            color === this.grid[y][x - 1] &&
+            color === this.grid[y][x - 2]) ||
+          (y <= this.height - 3 &&
+            color === this.grid[y + 1][x] &&
+            color === this.grid[y + 2][x] &&
+            tries < 10)
+        );
         this.grid[y][x] = color;
       }
     }
@@ -97,6 +163,34 @@ export class Engine {
     return Array.from({ length: this.height }, () =>
       Array.from({ length: this.width }, () => false)
     );
+  }
+
+  setMask(mask: Mask, maskImageWidth?: number) {
+    this.mask = mask;
+    if (maskImageWidth) this.maskImageWidth = maskImageWidth;
+  }
+
+  // Check top contact against mask using multiple sample points across each cell.
+  private checkTopContact(): boolean {
+    if (!this.mask) return false;
+    const cellPx = 48;
+    const canvasWidthPx = this.width * cellPx;
+    const scale = this.mask.width / canvasWidthPx;
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        const v = this.grid[y][x];
+        if (v < 0) continue;
+        // compute cell top in screen pixels
+        const cellTopY = y * cellPx - this.scrollOffsetPx;
+        // prepare sample Xs in mask image space
+        const sampleXs: number[] = this.maskCheckSamples.map((f) => {
+          const localX = x * cellPx + f * cellPx;
+          return localX * scale;
+        });
+        if (cellTouchesMask(this.mask, cellTopY, sampleXs)) return true;
+      }
+    }
+    return false;
   }
 
   private randColorIndex(): number {
@@ -148,16 +242,36 @@ export class Engine {
 
   update(dtMs: number) {
     if (this.hasWon || this.hasLost) return;
-
-    if (this.phase === "idle" && this.autoRiseRateRowsPerSec > 0) {
-      this.riseAccumRows += (this.autoRiseRateRowsPerSec * dtMs) / 1000;
-      while (this.riseAccumRows >= 1) {
-        this.riseAccumRows -= 1;
-        const lost = this.insertRowFromBottom();
+    // SCROLLING: advance fractional pixel scroll first
+    if (this.phase === "idle" && this.scrollSpeedPxPerSec > 0) {
+      this.scrollOffsetPx += (this.scrollSpeedPxPerSec * dtMs) / 1000;
+      const cellPx = 48; // renderer CELL constant; kept as a literal to avoid refactor
+      // Consume as many full rows as needed (handle large dtMs)
+      while (this.scrollOffsetPx >= cellPx) {
+        this.scrollOffsetPx -= cellPx;
+        const lost = this.insertRowFromBottomFromQueue();
         if (lost) {
           this.hasLost = true;
           return;
         }
+      }
+      // Immediate top-of-screen loss: if any occupied cell's top edge
+      // crosses y <= 0 (consider fractional scrollOffset), the game is lost
+      // immediately instead of waiting for a full-row shift.
+      for (let y = 0; y < this.height; y++) {
+        for (let x = 0; x < this.width; x++) {
+          if (this.grid[y][x] >= 0) {
+            const topY = y * cellPx - this.scrollOffsetPx;
+            if (topY <= 0) {
+              this.hasLost = true;
+              return;
+            }
+          }
+        }
+      }
+      // After scroll movement (including fractional), check mask contact
+      if (this.mask && this.checkTopContact()) {
+        if (this.onTopContact) this.onTopContact();
       }
     }
 
@@ -211,9 +325,82 @@ export class Engine {
       } else {
         this.phase = "idle";
         this.chainCount = 0;
+        // WIN CHECK: after cascades settled, if the on-screen win line has
+        // risen into view (rowsInserted >= totalLevelLines) and no occupied
+        // cell exists above the win line, fire onWin. This matches the
+        // renderer which only draws the win line once it has risen into the
+        // visible canvas.
+        if (this.rowsInserted >= this.totalLevelLines) {
+          const cellPx = 48;
+          const canvasH = this.height * cellPx;
+          // Use the same formula as getState().winLineY so the logical win
+          // check matches the on-screen line position. The win line starts
+          // below the canvas until enough rows have been inserted.
+          const winLineScreenY =
+            canvasH +
+            (this.totalLevelLines - this.rowsInserted) * cellPx -
+            this.scrollOffsetPx;
+          let anyAbove = false;
+          for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+              if (this.grid[y][x] >= 0) {
+                const topY = y * cellPx - this.scrollOffsetPx;
+                const bottomY = topY + cellPx; // cell bottom in screen coords
+                // Consider a cell "above" the win line only if its entire
+                // bottom edge is above the line. This allows cells that are
+                // partially below the line (e.g. the row immediately below)
+                // to not block the win.
+                if (bottomY <= winLineScreenY) {
+                  anyAbove = true;
+                  break;
+                }
+              }
+            }
+            if (anyAbove) break;
+          }
+          if (!anyAbove) {
+            this.hasWon = true;
+            if (this.onWin) this.onWin();
+            return;
+          }
+        }
       }
       return;
     }
+    // Expose scroll offset in state for renderer
+    // (no-op here; getState will include scrollOffsetPx)
+  }
+
+  // Insert row using prebuilt queue (or empty) - shifts grid up by one row
+  private insertRowFromBottomFromQueue(): boolean {
+    // If any cell in the top visible row is occupied, that's a loss (blocks
+    // have reached the top of the visible grid). This is distinct from the
+    // mask-based top contact hook which callers may use for soft alerts.
+    for (let x = 0; x < this.width; x++) {
+      if (this.grid[0][x] >= 0) return true;
+    }
+    // Fire mask contact hook if mask indicates contact (non-lethal by default)
+    if (this.mask && this.checkTopContact()) {
+      if (this.onTopContact) this.onTopContact();
+    }
+    // shift rows up
+    for (let y = 0; y < this.height - 1; y++) {
+      this.grid[y] = this.grid[y + 1].slice();
+    }
+    // Next row is from queue or empty
+    const newRow = this.shiftNextRow();
+    // Ensure length
+    if (newRow.length !== this.width) {
+      const r = Array.from({ length: this.width }, () => -1);
+      for (let i = 0; i < Math.min(newRow.length, this.width); i++)
+        r[i] = newRow[i];
+      this.grid[this.height - 1] = r;
+    } else {
+      this.grid[this.height - 1] = newRow.slice();
+    }
+    this.cursorY = Math.max(0, this.cursorY - 1);
+    this.rowsInserted++;
+    return false;
   }
 
   private scanForMatches(): boolean {
@@ -256,14 +443,18 @@ export class Engine {
     return found;
   }
 
-  private applyClearAndCount(): { tilesCleared: number; clearedBelowLine: boolean } {
+  private applyClearAndCount(): {
+    tilesCleared: number;
+    clearedBelowLine: boolean;
+  } {
     let tilesCleared = 0;
     let clearedBelowLine = false;
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         if (this.matchMask[y][x]) {
           tilesCleared++;
-          if (this.showClearLine && y >= this.clearLineY) clearedBelowLine = true;
+          if (this.showClearLine && y >= this.clearLineY)
+            clearedBelowLine = true;
           this.grid[y][x] = -1;
         }
       }
@@ -332,6 +523,23 @@ export class Engine {
       showClearLine: this.showClearLine,
       hasWon: this.hasWon,
       hasLost: this.hasLost,
+      scrollOffsetPx: this.scrollOffsetPx,
+      // The win line concept: it should start off-screen below the canvas and
+      // only move into the visible area once `totalLevelLines` rows have been
+      // inserted. We compute the line as the canvas bottom plus the remaining
+      // rows (totalLevelLines - rowsInserted) so that when rowsInserted <
+      // totalLevelLines the line is below the canvas (off-screen). As more
+      // rows are inserted the value will decrease and the line will rise into
+      // view. Finally subtract fractional scrollOffsetPx.
+      winLineY:
+        this.height * 48 +
+        (this.totalLevelLines - this.rowsInserted) * 48 -
+        this.scrollOffsetPx,
+  // Provide a preview of the next row that will be inserted from the
+  // level queue (or an empty row when queue is empty). Renderer can use
+  // this to draw incoming tiles rising into view during fractional
+  // `scrollOffsetPx` values.
+  nextRowPreview: this.levelQueue.length > 0 ? this.levelQueue[0].slice() : Array.from({ length: this.width }, () => -1),
     };
   }
 }

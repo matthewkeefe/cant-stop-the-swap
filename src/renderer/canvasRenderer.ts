@@ -15,7 +15,7 @@ let blinkT = 0;
 
 /**
  * insetSrc
- * 
+ *
  * Utility to shrink a sprite source rectangle inward by a fixed number of pixels
  * on all sides. This prevents "texture bleeding," where scaling a sprite from
  * a packed atlas accidentally samples neighboring pixels (e.g., causing stray
@@ -44,21 +44,28 @@ function insetSrc(src: SrcRect, bleed = 0): SrcRect {
  */
 function drawGemCell(params: {
   ctx: CanvasRenderingContext2D;
-  v: number;                    // gem id / color index (>= 0)
-  px: number;                   // dest x (cell top-left) in pixels
-  py: number;                   // dest y (cell top-left) in pixels
+  v: number; // gem id / color index (>= 0)
+  px: number; // dest x (cell top-left) in pixels
+  py: number; // dest y (cell top-left) in pixels
   cellSize: number;
-  fgSkin?: Skin;                // provides image + pickSrcForColor(v)
-  colors: string[];             // fallback palette
-  isClearing: boolean;          // phase === "clearing"
-  blinkT: number;               // ms, used for flash overlay
-  spriteBleed?: number;         // default 1px bleed inset if needed
-  insetPx?: number;             // override inset px; default 10% of cellSize clamped to >=2
-  isMatched?: boolean;          // only flash if matched
+  fgSkin?: Skin; // provides image + pickSrcForColor(v)
+  colors: string[]; // fallback palette
+  isClearing: boolean; // phase === "clearing"
+  blinkT: number; // ms, used for flash overlay
+  spriteBleed?: number; // default 1px bleed inset if needed
+  insetPx?: number; // override inset px; default 10% of cellSize clamped to >=2
+  isMatched?: boolean; // only flash if matched
 }) {
   const {
-    ctx, v, px, py, cellSize,
-    fgSkin, colors, isClearing, blinkT,
+    ctx,
+    v,
+    px,
+    py,
+    cellSize,
+    fgSkin,
+    colors,
+    isClearing,
+    blinkT,
     spriteBleed = 1,
     insetPx,
     isMatched,
@@ -68,7 +75,7 @@ function drawGemCell(params: {
   ctx.imageSmoothingEnabled = false;
 
   // Gem inset (inside tile border)
-  const inset = insetPx ?? Math.max(2, Math.floor(cellSize * 0.10));
+  const inset = insetPx ?? Math.max(2, Math.floor(cellSize * 0.1));
   const dx = px + inset;
   const dy = py + inset;
   const dw = cellSize - inset * 2;
@@ -81,8 +88,8 @@ function drawGemCell(params: {
   if (fgSkin?.image && fgSkin.image.complete && fgSkin.pickSrcForColor) {
     const raw = fgSkin.pickSrcForColor(v);
     const { sx, sy, sw, sh } = insetSrc(raw, spriteBleed);
-  // Always draw the original sprite, no tint overlay
-  ctx.drawImage(fgSkin.image, sx, sy, sw, sh, dx, dy, dw, dh);
+    // Always draw the original sprite, no tint overlay
+    ctx.drawImage(fgSkin.image, sx, sy, sw, sh, dx, dy, dw, dh);
   } else {
     // Flat color fallback
     ctx.fillStyle = colors[v] ?? "#888";
@@ -106,6 +113,7 @@ export function drawStateToCanvas(
   state: GameState,
   cellSize = 48,
   dtMs = 16.666,
+  scrollOffsetPx = 0,
   bgSkin?: Skin,
   fgSkin?: Skin
 ) {
@@ -136,10 +144,22 @@ export function drawStateToCanvas(
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const v = grid[y][x];
-      if (v < 0) continue;
       const px = x * cellSize;
-      const py = y * cellSize;
-      const isMatched = !!(state.matchMask && state.matchMask[y] && state.matchMask[y][x]);
+      const py = y * cellSize - scrollOffsetPx;
+
+      // Draw background tile from skin if available
+      if (bgSkin?.image && bgSkin.image.complete && bgSkin.pickSrcForCell) {
+        const src = bgSkin.pickSrcForCell(x, y);
+        const { sx, sy, sw, sh } = insetSrc(src, 0);
+        ctx.drawImage(bgSkin.image, sx, sy, sw, sh, px, py, cellSize, cellSize);
+      }
+
+      if (v < 0) continue;
+      const isMatched = !!(
+        state.matchMask &&
+        state.matchMask[y] &&
+        state.matchMask[y][x]
+      );
       drawGemCell({
         ctx,
         v,
@@ -159,18 +179,57 @@ export function drawStateToCanvas(
   // Falling pieces (draw using fgSkin if available)
   for (const p of fallPieces) {
     const px = p.x * cellSize;
-    const py = p.y * cellSize;
+    const py = p.y * cellSize - scrollOffsetPx;
     if (fgSkin?.image && fgSkin.image.complete && fgSkin.pickSrcForColor) {
       const { sx, sy, sw, sh } = fgSkin.pickSrcForColor(p.color);
-      const inset = Math.max(2, Math.floor(cellSize * 0.10));
+      const inset = Math.max(2, Math.floor(cellSize * 0.1));
       ctx.drawImage(
         fgSkin.image,
-        sx, sy, sw, sh,
-        px + inset, py + inset, cellSize - inset * 2, cellSize - inset * 2
+        sx,
+        sy,
+        sw,
+        sh,
+        px + inset,
+        py + inset,
+        cellSize - inset * 2,
+        cellSize - inset * 2
       );
     } else {
       ctx.fillStyle = state.colors[p.color] ?? "#888";
       ctx.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
+    }
+  }
+
+  // Draw next row preview rising from the bottom when fractional scrolling is in progress
+  const fractional = scrollOffsetPx % cellSize;
+  if (fractional > 0 && (state as any).nextRowPreview) {
+    const preview: number[] = (state as any).nextRowPreview;
+    const baseY = height * cellSize - fractional; // where the preview row's top should be
+    for (let x = 0; x < width; x++) {
+      const v = preview[x];
+      if (v < 0) continue;
+      const px = x * cellSize;
+      const py = baseY;
+      // draw background tile if available
+      if (bgSkin?.image && bgSkin.image.complete && bgSkin.pickSrcForCell) {
+        const src = bgSkin.pickSrcForCell(x, height - 1);
+        const { sx, sy, sw, sh } = insetSrc(src, 0);
+        ctx.drawImage(bgSkin.image, sx, sy, sw, sh, px, py, cellSize, cellSize);
+      }
+      // draw gem
+      drawGemCell({
+        ctx,
+        v,
+        px,
+        py,
+        cellSize,
+        fgSkin,
+        colors,
+        isClearing: false,
+        blinkT: 0,
+        spriteBleed: 1,
+        isMatched: false,
+      });
     }
   }
 
@@ -188,9 +247,23 @@ export function drawStateToCanvas(
     ctx.restore();
   }
 
+  // Win dashed line (if provided by engine state). Draw as a thinner dashed green-ish line.
+  if (typeof (state as any).winLineY === "number") {
+    const wY = (state as any).winLineY + 0.5;
+    ctx.save();
+    ctx.strokeStyle = "rgba(140, 255, 170, 0.9)";
+    ctx.setLineDash([6, 6]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, wY);
+    ctx.lineTo(width * cellSize, wY);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // Cursor outline (two cells)
   const cx = cursorX * cellSize;
-  const cy = cursorY * cellSize;
+  const cy = cursorY * cellSize - scrollOffsetPx;
   ctx.lineWidth = 3;
   ctx.strokeStyle = "#ffffff";
   ctx.strokeRect(cx + 1.5, cy + 1.5, cellSize * 2 - 3, cellSize - 3);
