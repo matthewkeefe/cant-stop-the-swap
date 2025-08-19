@@ -216,6 +216,22 @@ export function drawStateToCanvas(
     }
   }
 
+  // Particles (rainbow sprays)
+  const particles: any[] = (state as any).particles || [];
+  if (particles.length > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const pt of particles) {
+      const px = pt.x - 0; // particles are in canvas space already
+      const py = pt.y - scrollOffsetPx; // account for upward scroll
+      ctx.beginPath();
+      ctx.fillStyle = pt.color;
+      ctx.arc(px, py, pt.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // Draw next row preview rising from the bottom when fractional scrolling is in progress
   const fractional = scrollOffsetPx % cellSize;
   if (fractional > 0 && (state as any).nextRowPreview) {

@@ -7,6 +7,19 @@ export type FallPiece = {
   toY: number;
   y: number;
   color: number;
+  // Optional per-piece fall speed in rows per second. If undefined, Engine.fallSpeedRowsPerSec is used.
+  speedRowsPerSec?: number;
+};
+ 
+export type Particle = {
+  x: number; // px (unscrolled canvas-space: y is in same space)
+  y: number; // px (unscrolled)
+  vx: number; // px/sec
+  vy: number; // px/sec
+  ageMs: number;
+  lifeMs: number;
+  color: string; // CSS color
+  size: number; // px radius
 };
 
 export type GameState = {
@@ -34,6 +47,7 @@ export type GameState = {
   hasLost: boolean;
   // fractional upward scroll in pixels (renderer should subtract this)
   scrollOffsetPx?: number;
+  particles: Particle[];
   winLineY?: number;
   nextRowPreview?: number[];
 };
@@ -55,8 +69,16 @@ export class Engine {
   chainCount = 0;
   fallPieces: FallPiece[] = [];
   fallSpeedRowsPerSec = 18;
+  // Multiplier applied to fallSpeedRowsPerSec for cascades that result from clears.
+  // Values < 1 slow the animation; tune to taste (default 0.6).
+  cascadeFallSpeedMultiplier = 0.6;
   // Scrolling config: pixels/sec upward
   scrollSpeedPxPerSec = 24; // default: half cell/sec for 48px cell
+  // Particle system
+  particles: Particle[] = [];
+  particleGravityPxPerSec2 = 1600; // downward gravity
+  particleLifeMs = 800;
+  particlesPerTile = 6;
   // current fractional scroll offset in pixels
   scrollOffsetPx = 0;
   // Prebuilt level queue; when empty we insert empty rows
@@ -331,6 +353,21 @@ export class Engine {
     if (this.risePauseMs > 0) {
       this.risePauseMs = Math.max(0, this.risePauseMs - dtMs);
     }
+    // Update particle physics every tick so sprays animate regardless of phase
+    if (this.particles.length > 0) {
+      const alive: Particle[] = [];
+      for (const p of this.particles) {
+        p.ageMs += dtMs;
+        if (p.ageMs < p.lifeMs) {
+          // integrate
+          p.vy += (this.particleGravityPxPerSec2 * dtMs) / 1000;
+          p.x += (p.vx * dtMs) / 1000;
+          p.y += (p.vy * dtMs) / 1000;
+          alive.push(p);
+        }
+      }
+      this.particles = alive;
+    }
     // SCROLLING: advance fractional pixel scroll first
     // Only perform automatic scrolling when idle, scrolling speed > 0, and
     // not currently paused by a match countdown.
@@ -401,6 +438,34 @@ export class Engine {
           // multiple adds occur, the bar resets to the new total so it
           // represents the most-recent countdown length.
           this.risePauseMaxMs = this.risePauseMs;
+          // Emit rainbow particles for every cleared tile
+          const cellPx = 48;
+          for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+              if (this.matchMask[y][x]) {
+                const cx = x * cellPx + cellPx / 2;
+                const cy = y * cellPx + cellPx / 2;
+                for (let k = 0; k < this.particlesPerTile; k++) {
+                  const angle = Math.random() * Math.PI * 2;
+                  const speed = 160 + Math.random() * 200; // px/sec
+                  const vx = Math.cos(angle) * speed;
+                  const vy = -120 - Math.random() * 420; // upward bias
+                  const color = `hsl(${Math.floor(Math.random() * 360)},90%,60%)`;
+                  const size = 2 + Math.random() * 3;
+                  this.particles.push({
+                    x: cx,
+                    y: cy,
+                    vx,
+                    vy,
+                    ageMs: 0,
+                    lifeMs: this.particleLifeMs,
+                    color,
+                    size,
+                  });
+                }
+              }
+            }
+          }
         }
         this.startSettlingAnimation();
       }
@@ -409,9 +474,12 @@ export class Engine {
 
     if (this.phase === "settling") {
       if (this.fallPieces.length > 0) {
-        const dy = (this.fallSpeedRowsPerSec * dtMs) / 1000;
         let allLanded = true;
+        // Update each piece with its own speed (if provided) so cascade pieces
+        // can fall slower than normal moves.
         for (const p of this.fallPieces) {
+          const speed = p.speedRowsPerSec ?? this.fallSpeedRowsPerSec;
+          const dy = (speed * dtMs) / 1000;
           if (p.y < p.toY) p.y = Math.min(p.y + dy, p.toY);
           if (p.y < p.toY) allLanded = false;
         }
@@ -491,10 +559,10 @@ export class Engine {
     for (let y = 0; y < this.height - 1; y++) {
       this.grid[y] = this.grid[y + 1].slice();
     }
-  // Next row is from queue or empty. Queue rows are pre-sanitized in
-  // setLevelQueue(), so use them directly to avoid visible changes while
-  // the row is rising into view.
-  const newRow = this.shiftNextRow();
+    // Next row is from queue or empty. Queue rows are pre-sanitized in
+    // setLevelQueue(), so use them directly to avoid visible changes while
+    // the row is rising into view.
+    const newRow = this.shiftNextRow();
     // Ensure length
     if (newRow.length !== this.width) {
       const r = Array.from({ length: this.width }, () => -1);
@@ -583,7 +651,22 @@ export class Engine {
         const { color, fromY } = col[i];
         if (fromY !== writeY) {
           this.grid[fromY][x] = -1;
-          this.fallPieces.push({ x, fromY, toY: writeY, y: fromY, color });
+          // Default speed; if we're settling immediately after a clear we
+          // want cascades to fall slower so they read visually as part of
+          // the chain. StartSettlingAnimation is called from both swap()
+          // and after clearing; use the engine phase to decide multiplier.
+          const speed =
+            this.phase === "clearing"
+              ? this.fallSpeedRowsPerSec * this.cascadeFallSpeedMultiplier
+              : this.fallSpeedRowsPerSec;
+          this.fallPieces.push({
+            x,
+            fromY,
+            toY: writeY,
+            y: fromY,
+            color,
+            speedRowsPerSec: speed,
+          });
         }
         writeY--;
       }
@@ -655,6 +738,7 @@ export class Engine {
         this.levelQueue.length > 0
           ? this.levelQueue[0].slice()
           : Array.from({ length: this.width }, () => -1),
+  particles: this.particles.slice(),
     };
   }
 }

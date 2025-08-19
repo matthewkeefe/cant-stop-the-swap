@@ -7,6 +7,13 @@ import {
   type SrcRect,
 } from "./renderer/canvasRenderer";
 
+import sound000 from "./assets/sounds/impactMining_000.ogg";
+import sound001 from "./assets/sounds/impactMining_001.ogg";
+import sound002 from "./assets/sounds/impactMining_002.ogg";
+import sound003 from "./assets/sounds/impactMining_003.ogg";
+import sound004 from "./assets/sounds/impactMining_004.ogg";
+import mainMusic from "./assets/music/main_music.mp3";
+
 import tilesGemsPng from "./assets/sprites/gems.png";
 import tilesGemsXmlUrl from "./assets/sprites/gems.xml?url";
 import { type Atlas, loadGemsAtlas } from "./atlas"; // atlas helpers moved to src/atlas.ts
@@ -31,6 +38,11 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const lastCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const matchAudioRef = useRef<HTMLAudioElement | null>(null);
+  const lastMatchesRef = useRef<number>(0);
+  const chainAudioRef = useRef<HTMLAudioElement[]>([]);
+  const lastChainRef = useRef<number>(0);
+  const musicRef = useRef<HTMLAudioElement | null>(null);
 
   // Skins
   const backtilesAtlasRef = useRef<Atlas | null>(null);
@@ -63,6 +75,34 @@ export default function App() {
 
   // Load atlases once
   useEffect(() => {
+    // Prepare match sound
+    try {
+      matchAudioRef.current = new Audio(sound000);
+      matchAudioRef.current.preload = "auto";
+    } catch (e) {
+      matchAudioRef.current = null;
+    }
+    // Prepare chain sounds
+    try {
+      chainAudioRef.current = [
+        new Audio(sound001),
+        new Audio(sound002),
+        new Audio(sound003),
+        new Audio(sound004),
+      ];
+      for (const a of chainAudioRef.current) a.preload = "auto";
+    } catch (e) {
+      chainAudioRef.current = [];
+    }
+    // Prepare background music (looping)
+    try {
+      musicRef.current = new Audio(mainMusic);
+      musicRef.current.loop = true;
+      musicRef.current.preload = "auto";
+      musicRef.current.volume = 0.5;
+    } catch (e) {
+      musicRef.current = null;
+    }
     //console.log('[App] useEffect running. scene:', scene, 'atlasesReady:', atlasesReady);
     (async () => {
       try {
@@ -142,6 +182,42 @@ export default function App() {
       if (scene === "play" && engineRef.current) {
         engineRef.current.update(dt);
         const s = engineRef.current.getState();
+
+        // Play match sound when matchesTotal increments
+        if (s.matchesTotal > lastMatchesRef.current) {
+          lastMatchesRef.current = s.matchesTotal;
+          try {
+            if (matchAudioRef.current) {
+              matchAudioRef.current.currentTime = 0;
+              const p = matchAudioRef.current.play();
+              if (p && typeof p.then === "function") p.catch(() => {});
+            }
+          } catch (e) {
+            // ignore playback errors
+          }
+        }
+
+        // Play chain sound when chainCount increases (only for cascades, i.e. >1)
+        if (s.chainCount > lastChainRef.current) {
+          const newChain = s.chainCount;
+          // Only treat chains above 1 as cascades (avoid duplicating match sound)
+          // Map chainCount -> audio index as follows:
+          // 2 -> 001 (index 0), 3 -> 002 (index 1), 4 -> 003 (index 2), 5+ -> 004 (index 3)
+          if (newChain > 1) {
+            const idx = Math.min(Math.max(0, newChain - 2), 3);
+            const audio = chainAudioRef.current[idx];
+            if (audio) {
+              try {
+                audio.currentTime = 0;
+                const p = audio.play();
+                if (p && typeof p.then === "function") p.catch(() => {});
+              } catch (e) {
+                // ignore
+              }
+            }
+          }
+          lastChainRef.current = newChain;
+        }
 
         // Skins (background + foreground) when atlases are ready
         let bgSkin: Skin | undefined;
@@ -348,7 +424,20 @@ export default function App() {
     // Set the totalLevelLines so engine computes the rising win line; the
     // engine will add the +16 rows already included above.
     engineRef.current.totalLevelLines = total;
-
+  lastMatchesRef.current = 0;
+  lastChainRef.current = 0;
+  if (matchAudioRef.current) matchAudioRef.current.currentTime = 0;
+  for (const a of chainAudioRef.current) if (a) a.currentTime = 0;
+  // Start background music (attempt to play; browsers may block until interaction)
+  try {
+    if (musicRef.current) {
+      musicRef.current.currentTime = 0;
+      const p = musicRef.current.play();
+      if (p && typeof p.then === "function") p.catch(() => {});
+    }
+  } catch (e) {
+    // ignore
+  }
     setScene("play");
     setHud({
       score: 0,
@@ -362,6 +451,18 @@ export default function App() {
   risePauseMaxMs: 0,
     });
   }
+
+  // Pause music when leaving play scene (cleanup)
+  useEffect(() => {
+    return () => {
+      try {
+        if (musicRef.current) {
+          musicRef.current.pause();
+          musicRef.current.currentTime = 0;
+        }
+      } catch (e) {}
+    };
+  }, []);
 
   const onPresetChange = (value: PresetKey) => {
     setInputs((p) => ({
@@ -421,6 +522,62 @@ export default function App() {
                   <strong>Start</strong>.
                 </p>
               ) : null}
+              {/* Persistent chain countdown bar: full width of the game panel */}
+              <div
+                style={{
+                  width: WIDTH * CELL,
+                  marginTop: 8,
+                  marginBottom: 8,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "stretch",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    fontSize: 12,
+                    color: "#cbd5e1",
+                    opacity: 0.9,
+                    marginBottom: 6,
+                  }}
+                >
+                  <div>Chain: </div>
+                  <div>
+                    {hud.risePauseMs > 0 ? (
+                      <strong>STOP: {Math.ceil(hud.risePauseMs / 1000)}</strong>
+                    ) : (
+                      <span style={{ opacity: 0.6 }}></span>
+                    )}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    height: 10,
+                    background: "rgba(255,255,255,0.06)",
+                    borderRadius: 6,
+                    overflow: "hidden",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02)",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.max(
+                        0,
+                        Math.min(
+                          100,
+                          hud.risePauseMaxMs ? (hud.risePauseMs / hud.risePauseMaxMs) * 100 : 0
+                        )
+                      )}%`,
+                      height: "100%",
+                      background: "#6ee7b7",
+                      transition: "width 120ms linear",
+                    }}
+                  />
+                </div>
+              </div>
               {/* Game grid and overlays */}
               <div
                 style={{
@@ -500,40 +657,6 @@ export default function App() {
               {/* Score HUD moved above settings */}
               {scene === "play" && (
                 <div style={{ fontSize: 14, opacity: 0.9, marginBottom: 16 }}>
-                  <div style={{ fontSize: 24, marginBottom: 6 }}>
-                    {hud.risePauseMs > 0 ? (
-                      <div>
-                        <strong>{Math.ceil(hud.risePauseMs / 1000)}</strong>
-                        <div
-                          style={{
-                            marginTop: 6,
-                            height: 8,
-                            width: 160,
-                            background: "rgba(255,255,255,0.08)",
-                            borderRadius: 6,
-                            overflow: "hidden",
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: `${Math.max(
-                                0,
-                                Math.min(
-                                  100,
-                                  (hud.risePauseMaxMs
-                                    ? (hud.risePauseMs / hud.risePauseMaxMs) * 100
-                                    : 0)
-                                )
-                              )}%`,
-                              height: "100%",
-                              background: "#6ee7b7",
-                              transition: "width 120ms linear",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
                   <div>
                     Score: <strong>{hud.score}</strong>
                   </div>
