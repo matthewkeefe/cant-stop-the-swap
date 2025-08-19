@@ -7,11 +7,17 @@ export type SrcRect = { sx: number; sy: number; sw: number; sh: number };
 export type Skin = {
   image: HTMLImageElement | null; // sheet image
   pickSrcForCell: (x: number, y: number) => SrcRect; // background choose per cell if you want variety
-  pickSrcForColor?: (colorIndex: number) => SrcRect; // foreground gem by color
+  // foreground gem by color. Optional second param 'variant' can be
+  // "normal" or "clear" to request a matched/clearing sprite variant.
+  pickSrcForColor?: (
+    colorIndex: number,
+    variant?: "normal" | "clear"
+  ) => SrcRect; // foreground gem by color
   // NB: If pickSrcForColor is undefined, renderer uses flat colors fallback for gems.
 };
 
 let blinkT = 0;
+const FADE_MS = 300; // fade duration from full to zero opacity (ms)
 
 /**
  * insetSrc
@@ -86,7 +92,8 @@ function drawGemCell(params: {
     return;
   }
   if (fgSkin?.image && fgSkin.image.complete && fgSkin.pickSrcForColor) {
-    const raw = fgSkin.pickSrcForColor(v);
+    const variant = isMatched && isClearing ? "clear" : "normal";
+    const raw = fgSkin.pickSrcForColor(v, variant);
     const { sx, sy, sw, sh } = insetSrc(raw, spriteBleed);
     // Always draw the original sprite, no tint overlay
     ctx.drawImage(fgSkin.image, sx, sy, sw, sh, dx, dy, dw, dh);
@@ -96,12 +103,21 @@ function drawGemCell(params: {
     ctx.fillRect(dx, dy, dw, dh);
   }
 
-  // Flash overlay only for matched tiles during clearing
-  if (isClearing && blinkT < 200 && isMatched) {
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
-    ctx.fillRect(dx, dy, dw, dh);
+    // Fade overlay for matched tiles during clearing: opacity goes from 1 -> 0
+    // over FADE_MS milliseconds. Use a temporary ctx.save()/restore() to
+    // isolate globalAlpha changes.
+    if (isClearing && isMatched) {
+      const t = Math.min(FADE_MS, Math.max(0, blinkT));
+      const alpha = 1 - t / FADE_MS; // 1 -> 0
+      if (alpha > 0) {
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.6; // scale down so sprite still visible underneath
+        ctx.fillStyle = "white";
+        ctx.fillRect(dx, dy, dw, dh);
+        ctx.restore();
+      }
+    }
   }
-}
 
 /**
  * Draws the game state.
@@ -130,7 +146,7 @@ export function drawStateToCanvas(
     clearLineY,
   } = state;
 
-  blinkT = (blinkT + dtMs) % 400;
+    blinkT = (blinkT + dtMs) % FADE_MS;
 
   // Background (canvas)
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);

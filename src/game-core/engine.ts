@@ -26,6 +26,8 @@ export type GameState = {
   targetLines: number;
   autoRiseRateRowsPerSec: number;
   riseAccumRows: number;
+  risePauseMs: number;
+  risePauseMaxMs: number;
   clearLineY: number;
   showClearLine: boolean;
   hasWon: boolean;
@@ -77,6 +79,10 @@ export class Engine {
   targetLines = 5;
   autoRiseRateRowsPerSec = 0.6;
   riseAccumRows = 0;
+  // milliseconds remaining to pause automatic rising
+  risePauseMs = 0;
+  // the most recent total pause duration used to render a progress bar (ms)
+  risePauseMaxMs = 0;
   clearLineY: number;
   showClearLine = false;
   hasWon = false;
@@ -108,19 +114,42 @@ export class Engine {
   // the visible grid immediately; the rest remain in this.levelQueue for
   // future scrolling.
   setLevelQueue(rows: number[][], visibleCount?: number) {
-    this.levelQueue = rows.slice();
     const want = visibleCount !== undefined ? Math.max(0, visibleCount | 0) : 0;
+
+    // Normalize incoming rows to width and build a simulated grid copy so we
+    // can sanitize each queued row as if it were inserted one-by-one on top
+    // of the current grid. This prevents queued rows from forming immediate
+    // horizontal or vertical triples when they arrive.
+    const simulatedGrid = this.grid.map((r) => r.slice());
+    const normalizedRows: number[][] = rows.map((r) =>
+      Array.from({ length: this.width }, (_, i) =>
+        r[i] !== undefined ? r[i] : -1
+      )
+    );
+
+    const sanitizedQueue: number[][] = [];
+    for (const rawRow of normalizedRows) {
+      const sanitized = this.sanitizeRow(rawRow.slice(), simulatedGrid);
+      sanitizedQueue.push(sanitized.slice());
+      // Simulate shifting the grid up and inserting the sanitized row so
+      // subsequent queued rows are sanitized with correct vertical context.
+      for (let y = 0; y < this.height - 1; y++)
+        simulatedGrid[y] = simulatedGrid[y + 1].slice();
+      simulatedGrid[this.height - 1] = sanitized.slice();
+    }
+
+    // Store the pre-sanitized queue
+    this.levelQueue = sanitizedQueue.slice();
+
+    // Prepare visible grid and populate bottom-up with up to `want` rows
     const temp: number[][] = Array.from({ length: this.height }, () =>
       Array.from({ length: this.width }, () => -1)
     );
-    // Fill bottom-up with up to `want` rows from the queue
     let placed = 0;
     for (let y = this.height - 1; y >= 0 && placed < want; y--) {
       if (this.levelQueue.length > 0) {
         const r = this.levelQueue.shift()!;
-        const row = Array.from({ length: this.width }, () => -1);
-        for (let x = 0; x < Math.min(r.length, this.width); x++) row[x] = r[x];
-        temp[y] = row;
+        temp[y] = r.slice();
         placed++;
       } else break;
     }
@@ -131,8 +160,64 @@ export class Engine {
 
   // Helper to pop next row or return empty row when queue is empty
   private shiftNextRow(): number[] {
-    if (this.levelQueue.length > 0) return this.levelQueue.shift()!;
+    if (this.levelQueue.length > 0) {
+      const r = this.levelQueue.shift()!;
+      // Queue rows are pre-sanitized in setLevelQueue(); return a copy.
+      return r.slice();
+    }
     return Array.from({ length: this.width }, () => -1);
+  }
+
+  // Sanitize a candidate row so it does not create immediate 3-in-a-row
+  // matches when inserted at the bottom. This removes horizontal triples
+  // within the row itself and avoids vertical triples with the two rows
+  // that will be directly above the inserted row (current bottom rows).
+  private sanitizeRow(
+    row: number[],
+    gridContext: Cell[][] = this.grid
+  ): number[] {
+    const w = this.width;
+    const numColors = this.colors.length;
+    const out = Array.from({ length: w }, (_, i) =>
+      row[i] !== undefined ? row[i] : -1
+    );
+
+    // Helper: pick a color not in the forbidden set
+    const pickAlt = (forbidden: Set<number>) => {
+      for (let c = 0; c < numColors; c++) if (!forbidden.has(c)) return c;
+      // fallback
+      return 0;
+    };
+
+    // First pass: fix horizontal triples left-to-right within the row
+    for (let x = 0; x < w; x++) {
+      if (out[x] < 0) continue;
+      if (x >= 2 && out[x] === out[x - 1] && out[x - 1] === out[x - 2]) {
+        // avoid matching the previous two
+        const forbidden = new Set<number>([out[x - 1]]);
+        // also avoid creating a vertical triple at this column
+        const top1 = gridContext[this.height - 1]?.[x] ?? -1;
+        const top2 = gridContext[this.height - 2]?.[x] ?? -1;
+        if (top1 >= 0 && top1 === top2) forbidden.add(top1);
+        out[x] = pickAlt(forbidden);
+      }
+    }
+
+    // Second pass: ensure no vertical triples with the two rows above
+    for (let x = 0; x < w; x++) {
+      if (out[x] < 0) continue;
+      const top1 = gridContext[this.height - 1]?.[x] ?? -1; // will be above after shift
+      const top2 = gridContext[this.height - 2]?.[x] ?? -1;
+      if (top1 >= 0 && top2 >= 0 && top1 === top2 && out[x] === top1) {
+        const forbidden = new Set<number>([top1]);
+        // Also avoid making horizontal triple by matching neighbors
+        if (x >= 1 && out[x - 1] >= 0 && out[x - 1] === out[x - 2])
+          forbidden.add(out[x - 1]);
+        out[x] = pickAlt(forbidden);
+      }
+    }
+
+    return out;
   }
 
   setStartingLines(n: number) {
@@ -242,8 +327,18 @@ export class Engine {
 
   update(dtMs: number) {
     if (this.hasWon || this.hasLost) return;
+    // Tick down any rise pause timer first; when >0, automatic rising is paused
+    if (this.risePauseMs > 0) {
+      this.risePauseMs = Math.max(0, this.risePauseMs - dtMs);
+    }
     // SCROLLING: advance fractional pixel scroll first
-    if (this.phase === "idle" && this.scrollSpeedPxPerSec > 0) {
+    // Only perform automatic scrolling when idle, scrolling speed > 0, and
+    // not currently paused by a match countdown.
+    if (
+      this.phase === "idle" &&
+      this.scrollSpeedPxPerSec > 0 &&
+      this.risePauseMs <= 0
+    ) {
       this.scrollOffsetPx += (this.scrollSpeedPxPerSec * dtMs) / 1000;
       const cellPx = 48; // renderer CELL constant; kept as a literal to avoid refactor
       // Consume as many full rows as needed (handle large dtMs)
@@ -297,6 +392,15 @@ export class Engine {
             this.hasWon = true;
             return;
           }
+          // Add pause time based on chainCount: 1-chain -> 1000ms, 2-chain -> 2000ms,
+          // and exponential thereafter (2^(n-1) * 1000).
+          const baseMs = 1000;
+          const add = baseMs * Math.pow(2, Math.max(0, this.chainCount - 1));
+          this.risePauseMs += add;
+          // track the current total as the max for the progress bar; if
+          // multiple adds occur, the bar resets to the new total so it
+          // represents the most-recent countdown length.
+          this.risePauseMaxMs = this.risePauseMs;
         }
         this.startSettlingAnimation();
       }
@@ -387,8 +491,10 @@ export class Engine {
     for (let y = 0; y < this.height - 1; y++) {
       this.grid[y] = this.grid[y + 1].slice();
     }
-    // Next row is from queue or empty
-    const newRow = this.shiftNextRow();
+  // Next row is from queue or empty. Queue rows are pre-sanitized in
+  // setLevelQueue(), so use them directly to avoid visible changes while
+  // the row is rising into view.
+  const newRow = this.shiftNextRow();
     // Ensure length
     if (newRow.length !== this.width) {
       const r = Array.from({ length: this.width }, () => -1);
@@ -493,10 +599,10 @@ export class Engine {
     for (let y = 0; y < this.height - 1; y++) {
       this.grid[y] = this.grid[y + 1].slice();
     }
-    const newRow: number[] = Array.from({ length: this.width }, () =>
+    const rawRow: number[] = Array.from({ length: this.width }, () =>
       this.randColorIndex()
     );
-    this.grid[this.height - 1] = newRow;
+    this.grid[this.height - 1] = this.sanitizeRow(rawRow);
     this.cursorY = Math.max(0, this.cursorY - 1);
     return false;
   }
@@ -519,6 +625,8 @@ export class Engine {
       targetLines: this.targetLines,
       autoRiseRateRowsPerSec: this.autoRiseRateRowsPerSec,
       riseAccumRows: this.riseAccumRows,
+      risePauseMs: this.risePauseMs,
+      risePauseMaxMs: this.risePauseMaxMs,
       clearLineY: this.clearLineY,
       showClearLine: this.showClearLine,
       hasWon: this.hasWon,
@@ -535,11 +643,18 @@ export class Engine {
         this.height * 48 +
         (this.totalLevelLines - this.rowsInserted) * 48 -
         this.scrollOffsetPx,
-  // Provide a preview of the next row that will be inserted from the
-  // level queue (or an empty row when queue is empty). Renderer can use
-  // this to draw incoming tiles rising into view during fractional
-  // `scrollOffsetPx` values.
-  nextRowPreview: this.levelQueue.length > 0 ? this.levelQueue[0].slice() : Array.from({ length: this.width }, () => -1),
+      // Provide a preview of the next row that will be inserted from the
+      // level queue (or an empty row when queue is empty). Renderer can use
+      // this to draw incoming tiles rising into view during fractional
+      // `scrollOffsetPx` values.
+      // The queue is pre-sanitized in setLevelQueue(), so return a shallow
+      // copy for the renderer preview (no further sanitization). This keeps
+      // the rising preview identical to the row that will actually be
+      // inserted.
+      nextRowPreview:
+        this.levelQueue.length > 0
+          ? this.levelQueue[0].slice()
+          : Array.from({ length: this.width }, () => -1),
     };
   }
 }

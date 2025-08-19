@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Engine } from "./game-core/engine";
 
-const DEFAULT_TOTAL_LEVEL_LINES = 7;
 import {
   drawStateToCanvas,
   type Skin,
@@ -12,11 +11,17 @@ import tilesGemsPng from "./assets/sprites/gems.png";
 import tilesGemsXmlUrl from "./assets/sprites/gems.xml?url";
 import { type Atlas, loadGemsAtlas } from "./atlas"; // atlas helpers moved to src/atlas.ts
 
+// This is the total number of lines that will be used to determine the win condition.
+// The engine will add +16 overflow rows to this total for the level queue.
+// This allows the player to have some overflow space to play with before reaching the win line.
+// The player wins when they clear the target lines, which is set in the game options.
+const DEFAULT_TOTAL_LEVEL_LINES = 10; // Default total lines for the level queue
+
 type PresetKey = "Easy" | "Normal" | "Hard" | "Custom";
 const PRESETS: Record<PresetKey, number> = {
   Easy: 0.2,
-  Normal: 0.5,
-  Hard: 0.8,
+  Normal: 0.4,
+  Hard: 0.7,
   Custom: 0,
 };
 
@@ -51,10 +56,12 @@ export default function App() {
     linesEq: 0,
     tilesAbove: 0,
     hasWon: false,
-    hasLost: false,
+  hasLost: false,
+  risePauseMs: 0,
+  risePauseMaxMs: 0,
   });
 
-  // Load Kenney atlases once
+  // Load atlases once
   useEffect(() => {
     //console.log('[App] useEffect running. scene:', scene, 'atlasesReady:', atlasesReady);
     (async () => {
@@ -78,7 +85,6 @@ export default function App() {
     canvas.height = HEIGHT * CELL;
 
     const onKeyDown = (e: KeyboardEvent) => {
-      //console.log('[App] KeyDown:', e.key, 'scene:', scene);
       if (scene === "title") {
         if (e.key === "Enter") {
           startGame();
@@ -127,6 +133,7 @@ export default function App() {
     let last = performance.now();
     const ctx = canvas.getContext("2d")!;
 
+    // Main game loop
     const loop = () => {
       const now = performance.now();
       const dt = now - last;
@@ -136,7 +143,7 @@ export default function App() {
         engineRef.current.update(dt);
         const s = engineRef.current.getState();
 
-        // ---- Build skins (background + foreground) when atlases are ready ----
+        // Skins (background + foreground) when atlases are ready
         let bgSkin: Skin | undefined;
         let fgSkin: Skin | undefined;
 
@@ -176,9 +183,51 @@ export default function App() {
             5
           );
 
-          const pickByColor = (i: number): SrcRect => {
-            const name = order[Math.max(0, Math.min(order.length - 1, i | 0))];
-            const f = atlas.frames[name];
+          // Precompute a mapping from base frame -> clear variant so we
+          // preserve the exact shape when swapping to the clear sprite.
+          const clearMap: Record<string, string | undefined> = {};
+          for (const baseName of order) {
+            const lowerBase = baseName.toLowerCase();
+            // Prefer exact suffix matches, then any frame that contains
+            // both baseName and a 'clear' marker.
+            const exactCandidates = [
+              `${baseName}_clear`,
+              `${baseName}-clear`,
+              `${baseName}_matched`,
+            ];
+            let found: string | undefined = undefined;
+            for (const c of exactCandidates) {
+              if (atlas.frames[c]) {
+                found = c;
+                break;
+              }
+            }
+            if (!found) {
+              found = Object.keys(atlas.frames).find((k) => {
+                const kl = k.toLowerCase();
+                return (
+                  kl.includes(lowerBase) &&
+                  /_clear|\-clear|clear|matched/i.test(kl)
+                );
+              });
+            }
+            clearMap[baseName] = found;
+          }
+
+          const pickByColor = (
+            i: number,
+            variant: "normal" | "clear" = "normal"
+          ): SrcRect => {
+            const baseName =
+              order[Math.max(0, Math.min(order.length - 1, i | 0))];
+            if (variant === "clear") {
+              const clearName = clearMap[baseName];
+              if (clearName && atlas.frames[clearName]) {
+                const f = atlas.frames[clearName];
+                return { sx: f.x, sy: f.y, sw: f.w, sh: f.h };
+              }
+            }
+            const f = atlas.frames[baseName];
             return { sx: f.x, sy: f.y, sw: f.w, sh: f.h };
           };
 
@@ -245,6 +294,8 @@ export default function App() {
           tilesAbove,
           hasWon: s.hasWon,
           hasLost: s.hasLost,
+          risePauseMs: s.risePauseMs ?? 0,
+          risePauseMaxMs: s.risePauseMaxMs ?? 0,
         });
 
         canvas.style.filter = s.hasWon || s.hasLost ? "blur(3px)" : "none";
@@ -265,16 +316,18 @@ export default function App() {
     };
   }, [scene, atlasesReady]);
 
+  // Start the game with initial settings
   function startGame() {
     engineRef.current = new Engine(WIDTH, HEIGHT, 5);
     engineRef.current.targetLines = inputs.targetLines;
-    const useRate =
-      inputs.preset === "Custom" ? inputs.rate : PRESETS[inputs.preset];
+    const useRate = inputs.preset === "Custom" ? inputs.rate : PRESETS[inputs.preset];
     engineRef.current.autoRiseRateRowsPerSec = useRate;
+    
     // Build prebuilt queue: totalLines + 16 overflow rows
     const total = Math.max(1, inputs.totalLines || DEFAULT_TOTAL_LEVEL_LINES);
     const queueLen = total + 16;
     const rows: number[][] = [];
+    
     for (let i = 0; i < queueLen; i++) {
       const row: number[] = [];
       for (let x = 0; x < WIDTH; x++) {
@@ -286,10 +339,12 @@ export default function App() {
       }
       rows.push(row);
     }
+    
     engineRef.current.setLevelQueue(
       rows,
       Math.max(0, Math.min(HEIGHT, inputs.startingLines))
     );
+    
     // Set the totalLevelLines so engine computes the rising win line; the
     // engine will add the +16 rows already included above.
     engineRef.current.totalLevelLines = total;
@@ -302,7 +357,9 @@ export default function App() {
       linesEq: 0,
       tilesAbove: 0,
       hasWon: false,
-      hasLost: false,
+  hasLost: false,
+  risePauseMs: 0,
+  risePauseMaxMs: 0,
     });
   }
 
@@ -443,6 +500,40 @@ export default function App() {
               {/* Score HUD moved above settings */}
               {scene === "play" && (
                 <div style={{ fontSize: 14, opacity: 0.9, marginBottom: 16 }}>
+                  <div style={{ fontSize: 24, marginBottom: 6 }}>
+                    {hud.risePauseMs > 0 ? (
+                      <div>
+                        <strong>{Math.ceil(hud.risePauseMs / 1000)}</strong>
+                        <div
+                          style={{
+                            marginTop: 6,
+                            height: 8,
+                            width: 160,
+                            background: "rgba(255,255,255,0.08)",
+                            borderRadius: 6,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${Math.max(
+                                0,
+                                Math.min(
+                                  100,
+                                  (hud.risePauseMaxMs
+                                    ? (hud.risePauseMs / hud.risePauseMaxMs) * 100
+                                    : 0)
+                                )
+                              )}%`,
+                              height: "100%",
+                              background: "#6ee7b7",
+                              transition: "width 120ms linear",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                   <div>
                     Score: <strong>{hud.score}</strong>
                   </div>
