@@ -7,16 +7,16 @@ import {
   type SrcRect,
 } from "./renderer/canvasRenderer";
 
-import sound000 from "./assets/sounds/impactMining_000.ogg";
-import sound001 from "./assets/sounds/impactMining_001.ogg";
-import sound002 from "./assets/sounds/impactMining_002.ogg";
-import sound003 from "./assets/sounds/impactMining_003.ogg";
-import sound004 from "./assets/sounds/impactMining_004.ogg";
-import mainMusic from "./assets/music/main_music.mp3";
-
 import tilesGemsPng from "./assets/sprites/gems.png";
 import tilesGemsXmlUrl from "./assets/sprites/gems.xml?url";
 import { type Atlas, loadGemsAtlas } from "./atlas"; // atlas helpers moved to src/atlas.ts
+import LEVELS from "./levels";
+import snd0 from "./assets/sounds/impactMining_000.ogg?url";
+import snd1 from "./assets/sounds/impactMining_001.ogg?url";
+import snd2 from "./assets/sounds/impactMining_002.ogg?url";
+import snd3 from "./assets/sounds/impactMining_003.ogg?url";
+import snd4 from "./assets/sounds/impactMining_004.ogg?url";
+import swapSnd from "./assets/sounds/swap.ogg?url";
 
 // This is the total number of lines that will be used to determine the win condition.
 // The engine will add +16 overflow rows to this total for the level queue.
@@ -24,13 +24,7 @@ import { type Atlas, loadGemsAtlas } from "./atlas"; // atlas helpers moved to s
 // The player wins when they clear the target lines, which is set in the game options.
 const DEFAULT_TOTAL_LEVEL_LINES = 10; // Default total lines for the level queue
 
-type PresetKey = "Easy" | "Normal" | "Hard" | "Custom";
-const PRESETS: Record<PresetKey, number> = {
-  Easy: 0.2,
-  Normal: 0.4,
-  Hard: 0.7,
-  Custom: 0,
-};
+// Preset keys removed — use a single explicit raise rate in inputs
 
 // ----------------------------------------------------------------------------
 
@@ -38,11 +32,6 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const lastCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const matchAudioRef = useRef<HTMLAudioElement | null>(null);
-  const lastMatchesRef = useRef<number>(0);
-  const chainAudioRef = useRef<HTMLAudioElement[]>([]);
-  const lastChainRef = useRef<number>(0);
-  const musicRef = useRef<HTMLAudioElement | null>(null);
 
   // Skins
   const backtilesAtlasRef = useRef<Atlas | null>(null);
@@ -58,9 +47,28 @@ export default function App() {
     totalLines: DEFAULT_TOTAL_LEVEL_LINES,
     targetLines: 5,
     startingLines: 5,
-    preset: "Normal" as PresetKey,
-    rate: PRESETS["Normal"],
+    // single raise rate setting (rows per second)
+    rate: 0.1,
   });
+
+  const [selectedLevelId, setSelectedLevelId] = useState<string>(LEVELS[0]?.id ?? "level-1");
+  // Preload audio elements for match/chain sounds
+  const soundsRef = useRef<HTMLAudioElement[] | null>(null);
+  // Preload swap sound
+  const swapRef = useRef<HTMLAudioElement | null>(null);
+  if (!soundsRef.current) {
+    soundsRef.current = [snd0, snd1, snd2, snd3, snd4].map((u) => {
+      const a = new Audio(u);
+      a.preload = "auto";
+      return a;
+    });
+  }
+  if (!swapRef.current) {
+    swapRef.current = new Audio(swapSnd);
+    swapRef.current.preload = "auto";
+  }
+  // Music element for the currently playing level
+  const musicRef = useRef<HTMLAudioElement | null>(null);
   const [hud, setHud] = useState({
     score: 0,
     matches: 0,
@@ -75,34 +83,21 @@ export default function App() {
 
   // Load atlases once
   useEffect(() => {
-    // Prepare match sound
-    try {
-      matchAudioRef.current = new Audio(sound000);
-      matchAudioRef.current.preload = "auto";
-    } catch (e) {
-      matchAudioRef.current = null;
+    // When a level is selected, copy its settings into the inputs so Start uses them.
+    const lvl = LEVELS.find((l) => l.id === selectedLevelId);
+    if (lvl) {
+      setInputs((p) => ({
+        ...p,
+        totalLines: lvl.totalLines,
+        startingLines: lvl.startingLines,
+        targetLines: lvl.targetLines,
+        rate: lvl.raiseRate,
+      }));
     }
-    // Prepare chain sounds
-    try {
-      chainAudioRef.current = [
-        new Audio(sound001),
-        new Audio(sound002),
-        new Audio(sound003),
-        new Audio(sound004),
-      ];
-      for (const a of chainAudioRef.current) a.preload = "auto";
-    } catch (e) {
-      chainAudioRef.current = [];
-    }
-    // Prepare background music (looping)
-    try {
-      musicRef.current = new Audio(mainMusic);
-      musicRef.current.loop = true;
-      musicRef.current.preload = "auto";
-      musicRef.current.volume = 0.5;
-    } catch (e) {
-      musicRef.current = null;
-    }
+  }, [selectedLevelId]);
+
+  // Load atlases once
+  useEffect(() => {
     //console.log('[App] useEffect running. scene:', scene, 'atlasesReady:', atlasesReady);
     (async () => {
       try {
@@ -182,42 +177,6 @@ export default function App() {
       if (scene === "play" && engineRef.current) {
         engineRef.current.update(dt);
         const s = engineRef.current.getState();
-
-        // Play match sound when matchesTotal increments
-        if (s.matchesTotal > lastMatchesRef.current) {
-          lastMatchesRef.current = s.matchesTotal;
-          try {
-            if (matchAudioRef.current) {
-              matchAudioRef.current.currentTime = 0;
-              const p = matchAudioRef.current.play();
-              if (p && typeof p.then === "function") p.catch(() => {});
-            }
-          } catch (e) {
-            // ignore playback errors
-          }
-        }
-
-        // Play chain sound when chainCount increases (only for cascades, i.e. >1)
-        if (s.chainCount > lastChainRef.current) {
-          const newChain = s.chainCount;
-          // Only treat chains above 1 as cascades (avoid duplicating match sound)
-          // Map chainCount -> audio index as follows:
-          // 2 -> 001 (index 0), 3 -> 002 (index 1), 4 -> 003 (index 2), 5+ -> 004 (index 3)
-          if (newChain > 1) {
-            const idx = Math.min(Math.max(0, newChain - 2), 3);
-            const audio = chainAudioRef.current[idx];
-            if (audio) {
-              try {
-                audio.currentTime = 0;
-                const p = audio.play();
-                if (p && typeof p.then === "function") p.catch(() => {});
-              } catch (e) {
-                // ignore
-              }
-            }
-          }
-          lastChainRef.current = newChain;
-        }
 
         // Skins (background + foreground) when atlases are ready
         let bgSkin: Skin | undefined;
@@ -374,6 +333,16 @@ export default function App() {
           risePauseMaxMs: s.risePauseMaxMs ?? 0,
         });
 
+        // If win/loss occurred, stop any playing music
+        if ((s.hasWon || s.hasLost) && musicRef.current) {
+          try {
+            musicRef.current.pause();
+            musicRef.current.currentTime = 0;
+          } catch (e) {
+            /* ignore */
+          }
+        }
+
         canvas.style.filter = s.hasWon || s.hasLost ? "blur(3px)" : "none";
       } else {
         // Title scene: clear
@@ -394,10 +363,83 @@ export default function App() {
 
   // Start the game with initial settings
   function startGame() {
-    engineRef.current = new Engine(WIDTH, HEIGHT, 5);
-    engineRef.current.targetLines = inputs.targetLines;
-    const useRate = inputs.preset === "Custom" ? inputs.rate : PRESETS[inputs.preset];
-    engineRef.current.autoRiseRateRowsPerSec = useRate;
+  // Stop previous music when starting/restarting
+  if (musicRef.current) {
+    try {
+      musicRef.current.pause();
+      musicRef.current.currentTime = 0;
+    } catch (e) {}
+    musicRef.current = null;
+  }
+
+  engineRef.current = new Engine(WIDTH, HEIGHT, 5);
+  engineRef.current.targetLines = inputs.targetLines;
+  // Use the explicit raise rate from inputs
+  engineRef.current.autoRiseRateRowsPerSec = inputs.rate;
+  // Wire up sound callback
+  engineRef.current.onMatch = (chainCount: number) => {
+    // Engine.chainCount: 1 = single initial match, 2+ = cascades.
+    try {
+      const sounds = soundsRef.current!;
+      let idx = 0;
+      if (chainCount <= 1) {
+        // Single match -> impactMining_000
+        idx = 0;
+      } else if (chainCount === 2) {
+        // First cascade after initial -> impactMining_001
+        idx = 1;
+      } else if (chainCount === 3) {
+        idx = 2;
+      } else if (chainCount === 4) {
+        idx = 3;
+      } else {
+        idx = 4;
+      }
+      const audio = sounds[idx] as HTMLAudioElement;
+      const clone = audio.cloneNode(true) as HTMLAudioElement;
+      clone.play().catch(() => {
+        /* ignore play errors (e.g., not allowed before user gesture) */
+      });
+    } catch (e) {
+      // swallow errors so game keeps running
+    }
+  };
+
+  // Play swap sound when engine notifies of swaps
+  engineRef.current.onSwap = () => {
+    try {
+      if (swapRef.current) {
+        const clone = swapRef.current.cloneNode(true) as HTMLAudioElement;
+        clone.play().catch(() => {});
+      }
+    } catch (e) {}
+  };
+
+  // Wire up onWin to stop music
+  engineRef.current.onWin = () => {
+    if (musicRef.current) {
+      try {
+        musicRef.current.pause();
+        musicRef.current.currentTime = 0;
+      } catch (e) {}
+      musicRef.current = null;
+    }
+  };
+
+  // Start playing level music if provided
+  const lvl = LEVELS.find((l) => l.id === selectedLevelId);
+  if (lvl && lvl.music) {
+    try {
+      const m = new Audio(lvl.music);
+      m.loop = true;
+      m.preload = "auto";
+      m.volume = 0.25; // default music volume
+      m.play().catch(() => {});
+      musicRef.current = m;
+    } catch (e) {
+      // ignore
+    }
+  }
     
     // Build prebuilt queue: totalLines + 16 overflow rows
     const total = Math.max(1, inputs.totalLines || DEFAULT_TOTAL_LEVEL_LINES);
@@ -424,20 +466,7 @@ export default function App() {
     // Set the totalLevelLines so engine computes the rising win line; the
     // engine will add the +16 rows already included above.
     engineRef.current.totalLevelLines = total;
-  lastMatchesRef.current = 0;
-  lastChainRef.current = 0;
-  if (matchAudioRef.current) matchAudioRef.current.currentTime = 0;
-  for (const a of chainAudioRef.current) if (a) a.currentTime = 0;
-  // Start background music (attempt to play; browsers may block until interaction)
-  try {
-    if (musicRef.current) {
-      musicRef.current.currentTime = 0;
-      const p = musicRef.current.play();
-      if (p && typeof p.then === "function") p.catch(() => {});
-    }
-  } catch (e) {
-    // ignore
-  }
+
     setScene("play");
     setHud({
       score: 0,
@@ -452,25 +481,7 @@ export default function App() {
     });
   }
 
-  // Pause music when leaving play scene (cleanup)
-  useEffect(() => {
-    return () => {
-      try {
-        if (musicRef.current) {
-          musicRef.current.pause();
-          musicRef.current.currentTime = 0;
-        }
-      } catch (e) {}
-    };
-  }, []);
-
-  const onPresetChange = (value: PresetKey) => {
-    setInputs((p) => ({
-      ...p,
-      preset: value,
-      rate: value === "Custom" ? p.rate : PRESETS[value],
-    }));
-  };
+  // preset change handler removed — UI no longer exposes rise preset controls
 
   // game framework
   return (
@@ -515,69 +526,70 @@ export default function App() {
             }}
           >
             <div>
-              <h2 style={{ margin: "0 0 8px 0" }}>Prism Grid</h2>
-              {scene === "title" ? (
-                <p style={{ marginTop: 0, opacity: 0.9 }}>
-                  Set your options, then press <strong>Enter</strong> or click{" "}
-                  <strong>Start</strong>.
-                </p>
-              ) : null}
-              {/* Persistent chain countdown bar: full width of the game panel */}
+              {/* Chain Gauge: persistent bar above the grid (full width). */}
               <div
                 style={{
                   width: WIDTH * CELL,
-                  marginTop: 8,
                   marginBottom: 8,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "stretch",
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    fontSize: 12,
-                    color: "#cbd5e1",
-                    opacity: 0.9,
-                    marginBottom: 6,
-                  }}
-                >
-                  <div>Chain: </div>
-                  <div>
-                    {hud.risePauseMs > 0 ? (
-                      <strong>STOP: {Math.ceil(hud.risePauseMs / 1000)}</strong>
-                    ) : (
-                      <span style={{ opacity: 0.6 }}></span>
-                    )}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    height: 10,
-                    background: "rgba(255,255,255,0.06)",
-                    borderRadius: 6,
-                    overflow: "hidden",
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02)",
-                  }}
-                >
+                <div style={{ position: "relative", height: 28 }}>
+                  {/* background track */}
                   <div
                     style={{
+                      position: "absolute",
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      background: "rgba(255,255,255,0.06)",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                    }}
+                  />
+
+                  {/* progress fill */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
                       width: `${Math.max(
                         0,
                         Math.min(
                           100,
-                          hud.risePauseMaxMs ? (hud.risePauseMs / hud.risePauseMaxMs) * 100 : 0
+                          hud.risePauseMaxMs
+                            ? (hud.risePauseMs / hud.risePauseMaxMs) * 100
+                            : 0
                         )
                       )}%`,
-                      height: "100%",
-                      background: "#6ee7b7",
+                      background: "linear-gradient(90deg,#6ee7b7,#34d399)",
                       transition: "width 120ms linear",
                     }}
                   />
+
+                  {/* overlay content inside the bar */}
+                  <div
+                    style={{
+                      position: "relative",
+                      height: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "0 10px",
+                      fontSize: 14,
+                      color: "#ffffff",
+                      fontWeight: 700,
+                      textShadow: "0 1px 2px rgba(0,0,0,0.4)",
+                    }}
+                  >
+                    <div>Chain Gauge</div>
+                    <div style={{ opacity: 0.95 }}>{Math.ceil((hud.risePauseMs || 0) / 1000)}s</div>
+                  </div>
                 </div>
               </div>
+
               {/* Game grid and overlays */}
               <div
                 style={{
@@ -587,6 +599,13 @@ export default function App() {
                   backgroundColor: "#0f0f12",
                   borderRadius: 8,
                   overflow: "hidden",
+                  // If the selected level has a background, apply it.
+                  backgroundImage: LEVELS.find((l) => l.id === selectedLevelId)
+                    ?.background
+                    ? `url(${LEVELS.find((l) => l.id === selectedLevelId)?.background})`
+                    : undefined,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
                 }}
               >
                 <canvas
@@ -654,9 +673,22 @@ export default function App() {
             </div>
 
             <div style={{ fontSize: 14 }}>
+              {/* Title and small intro moved to the right HUD */}
+              <div style={{ marginBottom: 10 }}>
+                <h2 style={{ margin: 0 }}>Prism Grid</h2>
+                {scene === "title" ? (
+                  <p style={{ marginTop: 4, opacity: 0.9 }}>
+                    Set your options, then press <strong>Enter</strong> or click <strong>Start</strong>.
+                  </p>
+                ) : null}
+              </div>
+
               {/* Score HUD moved above settings */}
               {scene === "play" && (
                 <div style={{ fontSize: 14, opacity: 0.9, marginBottom: 16 }}>
+                  <div style={{ fontSize: 24, marginBottom: 6 }}>
+                    {/* rise pause indicator already shown above the grid; keep this space for consistency */}
+                  </div>
                   <div>
                     Score: <strong>{hud.score}</strong>
                   </div>
@@ -667,8 +699,7 @@ export default function App() {
                     Current chain: <strong>x{Math.max(1, hud.chains)}</strong>
                   </div>
                   <div>
-                    Lines cleared (eq): <strong>{hud.linesEq}</strong> /{" "}
-                    <strong>{inputs.targetLines}</strong>
+                    Lines cleared (eq): <strong>{hud.linesEq}</strong> / <strong>{inputs.targetLines}</strong>
                   </div>
                   <div>
                     Tiles above line: <strong>{hud.tilesAbove}</strong>
@@ -677,109 +708,25 @@ export default function App() {
               )}
               <div style={{ marginBottom: 8 }}>
                 <label style={{ display: "block", marginBottom: 6 }}>
-                  Total Level Lines:
-                  <input
-                    type="number"
-                    min={1}
-                    max={999}
-                    step={1}
-                    value={inputs.totalLines}
-                    onChange={(e) =>
-                      setInputs((p) => ({
-                        ...p,
-                        totalLines: Math.max(
-                          1,
-                          parseInt(e.target.value || "0", 10)
-                        ),
-                      }))
-                    }
-                    style={{ width: 80 }}
-                  />
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>
-                    (Total lines sets the win threshold; +16 lines are added to
-                    the level queue to allow overflow)
-                  </div>
-                </label>
-                <label style={{ display: "block", marginBottom: 6 }}>
-                  Starting lines (visible at start):
-                  <input
-                    type="number"
-                    min={0}
-                    max={HEIGHT}
-                    step={1}
-                    value={inputs.startingLines}
-                    onChange={(e) =>
-                      setInputs((p) => ({
-                        ...p,
-                        startingLines: Math.max(
-                          0,
-                          Math.min(HEIGHT, parseInt(e.target.value || "0", 10))
-                        ),
-                      }))
-                    }
-                    style={{ width: 80 }}
-                  />
-                </label>
-
-                <label style={{ display: "block", marginBottom: 6 }}>
-                  Target lines (win):{" "}
-                  <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    step={1}
-                    value={inputs.targetLines}
-                    onChange={(e) =>
-                      setInputs((p) => ({
-                        ...p,
-                        targetLines: Math.max(
-                          1,
-                          parseInt(e.target.value || "0", 5)
-                        ),
-                      }))
-                    }
-                    style={{ width: 80 }}
-                  />
-                </label>
-
-                <label style={{ display: "block", marginBottom: 6 }}>
-                  Rise preset:&nbsp;
+                  Level:
                   <select
-                    value={inputs.preset}
-                    onChange={(e) =>
-                      onPresetChange(e.target.value as PresetKey)
+                    value={selectedLevelId}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSelectedLevelId(v);
+                      }
                     }
+                    style={{ width: 200, marginLeft: 8 }}
                   >
-                    <option>Easy</option>
-                    <option>Normal</option>
-                    <option>Hard</option>
-                    <option>Custom</option>
+                    {LEVELS.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
                   </select>
                 </label>
 
-                <label style={{ display: "block" }}>
-                  Rise rate (rows/sec):{" "}
-                  <input
-                    type="number"
-                    min={0}
-                    max={5}
-                    step={0.05}
-                    value={
-                      inputs.preset === "Custom"
-                        ? inputs.rate
-                        : PRESETS[inputs.preset]
-                    }
-                    onChange={(e) =>
-                      setInputs((p) => ({
-                        ...p,
-                        rate: parseFloat(e.target.value || "0"),
-                        preset: "Custom",
-                      }))
-                    }
-                    style={{ width: 80 }}
-                    disabled={inputs.preset !== "Custom"}
-                  />
-                </label>
+                {/* Only show level selector UI here. Other input controls removed per request. */}
               </div>
 
               {scene === "play" ? (

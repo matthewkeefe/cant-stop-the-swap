@@ -40,3 +40,60 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Grid background styling */
+.grid-container {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  /* CSS vars to tune appearance */
+  --grid-bg-tint: rgba(255, 255, 255, 0.06);
+  --grid-pattern-opacity: 0.06;
+  --grid-pattern-scale: 1;
+}
+
+.grid-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--grid-bg-tint);
+  pointer-events: none;
+}
+
+.grid-pattern {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2; /* above canvas but below overlays */
+  opacity: var(--grid-pattern-opacity, 0.06);
+  /* clearer repeating diagonal lines */
+  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 48px);
+  background-size: calc(48px * var(--grid-pattern-scale, 1)) calc(48px * var(--grid-pattern-scale, 1));
+}
+
+.grid-container .canvas-wrapper {
+  position: relative;
+  z-index: 1; /* above decorative layers */
+}
+
+.canvas-wrapper {
+  position: relative; /* ensure absolute children are positioned to the wrapper */
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-wrapper > div {
+  /* default children (like the level background) are placed below the canvas */
+  z-index: 0;
+}
+
+.canvas-wrapper canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 1; /* above background */
+}
+
+/* Overlays (win/lose dialog) use inline styles with zIndex:60 in App.tsx; ensure
+   they appear above everything. */

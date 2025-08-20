@@ -50,11 +50,11 @@ function insetSrc(src: SrcRect, bleed = 0): SrcRect {
  */
 function drawGemCell(params: {
   ctx: CanvasRenderingContext2D;
-  v: number; // gem id / color index (>= 0)
-  px: number; // dest x (cell top-left) in pixels
-  py: number; // dest y (cell top-left) in pixels
+  v: number;
+  px: number;
+  py: number;
   cellSize: number;
-  fgSkin?: Skin; // provides image + pickSrcForColor(v)
+  fgSkin?: Skin | undefined;
   colors: string[]; // fallback palette
   isClearing: boolean; // phase === "clearing"
   blinkT: number; // ms, used for flash overlay
@@ -85,39 +85,41 @@ function drawGemCell(params: {
   const dx = px + inset;
   const dy = py + inset;
   const dw = cellSize - inset * 2;
-  const dh = cellSize - inset * 2;
 
-  if (v < 0) {
-    // Do not draw anything for empty cells
-    return;
-  }
+  // Draw foreground gem from skin if available, else flat color
   if (fgSkin?.image && fgSkin.image.complete && fgSkin.pickSrcForColor) {
     const variant = isMatched && isClearing ? "clear" : "normal";
     const raw = fgSkin.pickSrcForColor(v, variant);
     const { sx, sy, sw, sh } = insetSrc(raw, spriteBleed);
-    // Always draw the original sprite, no tint overlay
-    ctx.drawImage(fgSkin.image, sx, sy, sw, sh, dx, dy, dw, dh);
+    ctx.save();
+    // Draw gems fully opaque so they appear above any background imagery.
+    ctx.globalAlpha = 1;
+    ctx.drawImage(fgSkin.image, sx, sy, sw, sh, dx, dy, dw, dw);
+    ctx.restore();
   } else {
-    // Flat color fallback
+    // Flat color fallback (opaque)
+    ctx.save();
+    ctx.globalAlpha = 1;
     ctx.fillStyle = colors[v] ?? "#888";
-    ctx.fillRect(dx, dy, dw, dh);
+    ctx.fillRect(dx, dy, dw, dw);
+    ctx.restore();
   }
 
-    // Fade overlay for matched tiles during clearing: opacity goes from 1 -> 0
-    // over FADE_MS milliseconds. Use a temporary ctx.save()/restore() to
-    // isolate globalAlpha changes.
-    if (isClearing && isMatched) {
-      const t = Math.min(FADE_MS, Math.max(0, blinkT));
-      const alpha = 1 - t / FADE_MS; // 1 -> 0
-      if (alpha > 0) {
-        ctx.save();
-        ctx.globalAlpha = alpha * 0.6; // scale down so sprite still visible underneath
-        ctx.fillStyle = "white";
-        ctx.fillRect(dx, dy, dw, dh);
-        ctx.restore();
-      }
+  // Fade overlay for matched tiles during clearing: opacity goes from 1 -> 0
+  // over FADE_MS milliseconds. Use a temporary ctx.save()/restore() to
+  // isolate globalAlpha changes.
+  if (isClearing && isMatched) {
+    const t = Math.min(FADE_MS, Math.max(0, blinkT));
+    const alpha = 1 - t / FADE_MS; // 1 -> 0
+    if (alpha > 0) {
+      ctx.save();
+        ctx.globalAlpha = alpha * 0.5; // scale down so sprite still visible underneath
+      ctx.fillStyle = "white";
+      ctx.fillRect(dx, dy, dw, dw);
+      ctx.restore();
     }
   }
+}
 
 /**
  * Draws the game state.
@@ -131,7 +133,8 @@ export function drawStateToCanvas(
   dtMs = 16.666,
   scrollOffsetPx = 0,
   bgSkin?: Skin,
-  fgSkin?: Skin
+  fgSkin?: Skin,
+  canvasBgImage?: HTMLImageElement | null
 ) {
   const {
     width,
@@ -148,10 +151,14 @@ export function drawStateToCanvas(
 
     blinkT = (blinkT + dtMs) % FADE_MS;
 
-  // Background (canvas)
+  // Background (canvas) - clear and optionally draw canvas background image
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.fillStyle = "#0f0f12";
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (canvasBgImage && canvasBgImage.complete) {
+    ctx.save();
+    ctx.globalAlpha = 0.5; // 50% opacity for the glass texture
+    ctx.drawImage(canvasBgImage, 0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.restore();
+  }
   ctx.imageSmoothingEnabled = false;
 
   // No per-cell clearRect; only clear the canvas once at the start
@@ -163,7 +170,7 @@ export function drawStateToCanvas(
       const px = x * cellSize;
       const py = y * cellSize - scrollOffsetPx;
 
-      // Draw background tile from skin if available
+  // Draw background tile from skin if available
       if (bgSkin?.image && bgSkin.image.complete && bgSkin.pickSrcForCell) {
         const src = bgSkin.pickSrcForCell(x, y);
         const { sx, sy, sw, sh } = insetSrc(src, 0);
@@ -199,7 +206,10 @@ export function drawStateToCanvas(
     if (fgSkin?.image && fgSkin.image.complete && fgSkin.pickSrcForColor) {
       const { sx, sy, sw, sh } = fgSkin.pickSrcForColor(p.color);
       const inset = Math.max(2, Math.floor(cellSize * 0.1));
-      ctx.drawImage(
+  ctx.save();
+  // Draw falling pieces fully opaque so they render above the background
+  ctx.globalAlpha = 1;
+  ctx.drawImage(
         fgSkin.image,
         sx,
         sy,
@@ -210,9 +220,13 @@ export function drawStateToCanvas(
         cellSize - inset * 2,
         cellSize - inset * 2
       );
+      ctx.restore();
     } else {
-      ctx.fillStyle = state.colors[p.color] ?? "#888";
-      ctx.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = state.colors[p.color] ?? "#888";
+  ctx.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
+  ctx.restore();
     }
   }
 

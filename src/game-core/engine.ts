@@ -95,6 +95,10 @@ export class Engine {
   maskImageWidth = 0; // populated if mask provided (mask module gives width)
   onTopContact?: () => void;
   onWin?: () => void;
+  // Called when a clear/match occurs. Receives the current chain count (1 = first clear).
+  onMatch?: (chainCount: number) => void;
+  // Called whenever the player performs a swap action that changes grid cells
+  onSwap?: () => void;
   score = 0;
   matchesTotal = 0;
   linesClearedEq = 0;
@@ -326,6 +330,9 @@ export class Engine {
     this.grid[y][x] = b;
     this.grid[y][x + 1] = a;
 
+  // Notify listeners that a swap occurred
+  if (this.onSwap) this.onSwap();
+
     const anyMatches = this.scanForMatches();
     if (anyMatches) {
       this.phase = "clearing";
@@ -412,6 +419,10 @@ export class Engine {
       if (this.clearTimerMs <= 0) {
         const { tilesCleared, clearedBelowLine } = this.applyClearAndCount();
         if (tilesCleared > 0) {
+          // Notify listeners that a match/clear happened. Pass the chainCount
+          // which will be 1 for the initial clear in a chain or higher for
+          // cascades.
+          if (this.onMatch) this.onMatch(this.chainCount);
           this.matchesTotal += 1;
           const mult =
             this.chainCount - 1 < this.chainMultTable.length
