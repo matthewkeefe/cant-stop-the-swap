@@ -56,6 +56,13 @@ export default function App() {
   const soundsRef = useRef<HTMLAudioElement[] | null>(null);
   // Preload swap sound
   const swapRef = useRef<HTMLAudioElement | null>(null);
+  // Track currently playing cloned sounds so we can stop them on pause
+  const playingClonesRef = useRef<HTMLAudioElement[]>([]);
+  // Pause state (pause stops automatic rising and mutes future sounds)
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(paused);
+  // Remember previous scroll speed so we can restore after unpausing
+  const prevScrollSpeedRef = useRef<number | null>(null);
   if (!soundsRef.current) {
     soundsRef.current = [snd0, snd1, snd2, snd3, snd4].map((u) => {
       const a = new Audio(u);
@@ -81,9 +88,8 @@ export default function App() {
   risePauseMaxMs: 0,
   });
 
-  // Load atlases once
+  // When a level is selected, copy its settings into the inputs so Start uses them.
   useEffect(() => {
-    // When a level is selected, copy its settings into the inputs so Start uses them.
     const lvl = LEVELS.find((l) => l.id === selectedLevelId);
     if (lvl) {
       setInputs((p) => ({
@@ -95,6 +101,11 @@ export default function App() {
       }));
     }
   }, [selectedLevelId]);
+
+  // Keep pausedRef in sync with state
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   // Load atlases once
   useEffect(() => {
@@ -119,7 +130,7 @@ export default function App() {
     canvas.width = WIDTH * CELL;
     canvas.height = HEIGHT * CELL;
 
-    const onKeyDown = (e: KeyboardEvent) => {
+  const onKeyDown = (e: KeyboardEvent) => {
       if (scene === "title") {
         if (e.key === "Enter") {
           startGame();
@@ -128,7 +139,6 @@ export default function App() {
       }
       if (!engineRef.current) return;
 
-      // Only call startGame for R (reset), not for swap actions
       switch (e.key) {
         case "ArrowLeft":
           engineRef.current.moveCursor(-1, 0);
@@ -147,7 +157,7 @@ export default function App() {
         case " ":
         case "Space":
           e.preventDefault();
-          engineRef.current.swap();
+          if (!pausedRef.current) engineRef.current.swap();
           break;
         case "x":
         case "X":
@@ -157,8 +167,11 @@ export default function App() {
         case "R":
           startGame();
           break;
+        case "p":
+        case "P":
+          togglePause();
+          break;
         default:
-          // Do nothing for other keys
           break;
       }
     };
@@ -361,8 +374,55 @@ export default function App() {
     };
   }, [scene, atlasesReady]);
 
+  // Toggle pause: stops automatic rising and silences sounds/music
+  function togglePause() {
+    const now = !paused;
+    setPaused(now);
+    pausedRef.current = now;
+
+    if (now) {
+      // Pause engine automatic rise by zeroing scroll speed (remember previous)
+      if (engineRef.current) {
+        prevScrollSpeedRef.current = engineRef.current.scrollSpeedPxPerSec;
+        engineRef.current.scrollSpeedPxPerSec = 0;
+      }
+      // Pause music
+      if (musicRef.current) {
+        try {
+          musicRef.current.pause();
+        } catch (e) {}
+      }
+      // Stop playing clones
+      for (const a of playingClonesRef.current) {
+        try {
+          a.pause();
+          a.currentTime = 0;
+        } catch (e) {}
+      }
+      playingClonesRef.current = [];
+    } else {
+      // Unpause: restore previous scroll speed
+      if (engineRef.current && prevScrollSpeedRef.current !== null) {
+        engineRef.current.scrollSpeedPxPerSec = prevScrollSpeedRef.current;
+        prevScrollSpeedRef.current = null;
+      }
+      // Resume music for current level
+      const lvl = LEVELS.find((l) => l.id === selectedLevelId);
+      if (lvl && lvl.music) {
+        try {
+          const m = new Audio(lvl.music);
+          m.loop = true;
+          m.preload = "auto";
+          m.volume = 0.25;
+          m.play().catch(() => {});
+          musicRef.current = m;
+        } catch (e) {}
+      }
+    }
+  }
+
   // Start the game with initial settings
-  function startGame() {
+  function startGame(levelId?: string) {
   // Stop previous music when starting/restarting
   if (musicRef.current) {
     try {
@@ -372,10 +432,36 @@ export default function App() {
     musicRef.current = null;
   }
 
+  
+
+  // Determine effective level and inputs (prefer explicit levelId when provided)
+  const effectiveLevelId = levelId ?? selectedLevelId;
+  const lvlForStart = LEVELS.find((l) => l.id === effectiveLevelId);
+  const effectiveInputs = lvlForStart
+    ? {
+        totalLines: lvlForStart.totalLines,
+        startingLines: lvlForStart.startingLines,
+        targetLines: lvlForStart.targetLines,
+        rate: lvlForStart.raiseRate,
+      }
+    : inputs;
+
+  // Reflect chosen level settings in the UI
+  if (lvlForStart) {
+    setInputs((p) => ({ ...p, ...effectiveInputs }));
+  }
+
   engineRef.current = new Engine(WIDTH, HEIGHT, 5);
-  engineRef.current.targetLines = inputs.targetLines;
-  // Use the explicit raise rate from inputs
-  engineRef.current.autoRiseRateRowsPerSec = inputs.rate;
+  engineRef.current.targetLines = effectiveInputs.targetLines;
+  // Use the explicit raise rate from effectiveInputs
+  engineRef.current.autoRiseRateRowsPerSec = effectiveInputs.rate;
+  // Prevent swapping while paused by wrapping the instance method
+  const origSwap = engineRef.current.swap.bind(engineRef.current);
+  engineRef.current.swap = function () {
+    if (pausedRef.current) return;
+    // @ts-ignore call original
+    return origSwap();
+  } as any;
   // Wire up sound callback
   engineRef.current.onMatch = (chainCount: number) => {
     // Engine.chainCount: 1 = single initial match, 2+ = cascades.
@@ -395,11 +481,11 @@ export default function App() {
       } else {
         idx = 4;
       }
-      const audio = sounds[idx] as HTMLAudioElement;
-      const clone = audio.cloneNode(true) as HTMLAudioElement;
-      clone.play().catch(() => {
-        /* ignore play errors (e.g., not allowed before user gesture) */
-      });
+  if (pausedRef.current) return;
+  const audio = sounds[idx] as HTMLAudioElement;
+  const clone = audio.cloneNode(true) as HTMLAudioElement;
+  clone.play().catch(() => {});
+  playingClonesRef.current.push(clone);
     } catch (e) {
       // swallow errors so game keeps running
     }
@@ -408,9 +494,11 @@ export default function App() {
   // Play swap sound when engine notifies of swaps
   engineRef.current.onSwap = () => {
     try {
+      if (pausedRef.current) return;
       if (swapRef.current) {
         const clone = swapRef.current.cloneNode(true) as HTMLAudioElement;
         clone.play().catch(() => {});
+        playingClonesRef.current.push(clone);
       }
     } catch (e) {}
   };
@@ -426,11 +514,10 @@ export default function App() {
     }
   };
 
-  // Start playing level music if provided
-  const lvl = LEVELS.find((l) => l.id === selectedLevelId);
-  if (lvl && lvl.music) {
+  // Start playing level music if provided (use effective level id)
+  if (lvlForStart && lvlForStart.music) {
     try {
-      const m = new Audio(lvl.music);
+      const m = new Audio(lvlForStart.music);
       m.loop = true;
       m.preload = "auto";
       m.volume = 0.25; // default music volume
@@ -441,8 +528,8 @@ export default function App() {
     }
   }
     
-    // Build prebuilt queue: totalLines + 16 overflow rows
-    const total = Math.max(1, inputs.totalLines || DEFAULT_TOTAL_LEVEL_LINES);
+  // Build prebuilt queue: totalLines + 16 overflow rows
+  const total = Math.max(1, effectiveInputs.totalLines || DEFAULT_TOTAL_LEVEL_LINES);
     const queueLen = total + 16;
     const rows: number[][] = [];
     
@@ -460,12 +547,12 @@ export default function App() {
     
     engineRef.current.setLevelQueue(
       rows,
-      Math.max(0, Math.min(HEIGHT, inputs.startingLines))
+      Math.max(0, Math.min(HEIGHT, effectiveInputs.startingLines))
     );
     
-    // Set the totalLevelLines so engine computes the rising win line; the
-    // engine will add the +16 rows already included above.
-    engineRef.current.totalLevelLines = total;
+  // Set the totalLevelLines so engine computes the rising win line; the
+  // engine will add the +16 rows already included above.
+  engineRef.current.totalLevelLines = total;
 
     setScene("play");
     setHud({
@@ -714,6 +801,8 @@ export default function App() {
                     onChange={(e) => {
                       const v = e.target.value;
                       setSelectedLevelId(v);
+                      // Trigger a full game reset as if Reset was pressed
+                      startGame(v);
                       }
                     }
                     style={{ width: 200, marginLeft: 8 }}
@@ -732,9 +821,11 @@ export default function App() {
               {scene === "play" ? (
                 <div>
                   <button onClick={() => startGame()}>Reset</button>
+                  <button onClick={() => togglePause()} style={{ marginLeft: 8 }}>
+                    {paused ? "Continue" : "Pause"}
+                  </button>
                   <p style={{ marginTop: 8, opacity: 0.8 }}>
-                    Controls: Arrows = move • Z/Space = swap • X = raise • R =
-                    reset
+                    Controls: Arrows = move • Z/Space = swap • X = raise • R = reset • P = pause/continue
                   </p>
                 </div>
               ) : (
