@@ -7,8 +7,8 @@ import {
   type SrcRect,
 } from "./renderer/canvasRenderer";
 
-import tilesGemsPng from "./assets/sprites/gems.png";
-import tilesGemsXmlUrl from "./assets/sprites/gems.xml?url";
+import tilesGemsPng from "./assets/sprites/graffiti.png";
+import tilesGemsXmlUrl from "./assets/sprites/graffiti.xml?url";
 import { type Atlas, loadGemsAtlas } from "./atlas"; // atlas helpers moved to src/atlas.ts
 import LEVELS from "./levels";
 import snd0 from "./assets/sounds/impactMining_000.ogg?url";

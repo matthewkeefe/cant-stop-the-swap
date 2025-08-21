@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextureAtlas imagePath="graffiti_spritesheet.png">
+    <!-- Row 1 (y=0): fresh icons, 64x64 each -->
+    <SubTexture name="crown_color"   x="0"   y="0"  width="64" height="64" />
+    <SubTexture name="star_color"    x="64"  y="0"  width="64" height="64" />
+    <SubTexture name="heart_color"   x="128" y="0"  width="64" height="64" />
+    <SubTexture name="bolt_color"    x="192" y="0"  width="64" height="64" />
+    <SubTexture name="raindrop_color" x="256" y="0" width="64" height="64" />
+    <!-- Row 2 (y=64): aged / weathered (melting) versions -->
+    <SubTexture name="crown_clear"    x="0"   y="64" width="64" height="64" />
+    <SubTexture name="star_clear"     x="64"  y="64" width="64" height="64" />
+    <SubTexture name="heart_clear"    x="128" y="64" width="64" height="64" />
+    <SubTexture name="bolt_clear"     x="192" y="64" width="64" height="64" />
+    <SubTexture name="raindrop_clear" x="256" y="64" width="64" height="64" />
+</TextureAtlas>
