@@ -10,7 +10,7 @@ export type FallPiece = {
   // Optional per-piece fall speed in rows per second. If undefined, Engine.fallSpeedRowsPerSec is used.
   speedRowsPerSec?: number;
 };
- 
+
 export type Particle = {
   x: number; // px (unscrolled canvas-space: y is in same space)
   y: number; // px (unscrolled)
@@ -59,6 +59,7 @@ export class Engine {
   width: number;
   height: number;
   colors: string[];
+  cellSize: number;
   grid: Cell[][];
   cursorX = 0;
   cursorY = 0;
@@ -118,6 +119,7 @@ export class Engine {
   constructor(width = 6, height = 12, numColors = 5) {
     this.width = width;
     this.height = height;
+    this.cellSize = 64; // default to 64px tiles
     this.colors = ["#e63946", "#2a9d8f", "#457b9d", "#f4a261", "#a29bfe"].slice(
       0,
       numColors
@@ -284,7 +286,7 @@ export class Engine {
   // Check top contact against mask using multiple sample points across each cell.
   private checkTopContact(): boolean {
     if (!this.mask) return false;
-    const cellPx = 48;
+    const cellPx = this.cellSize;
     const canvasWidthPx = this.width * cellPx;
     const scale = this.mask.width / canvasWidthPx;
     for (let y = 0; y < this.height; y++) {
@@ -330,8 +332,8 @@ export class Engine {
     this.grid[y][x] = b;
     this.grid[y][x + 1] = a;
 
-  // Notify listeners that a swap occurred
-  if (this.onSwap) this.onSwap();
+    // Notify listeners that a swap occurred
+    if (this.onSwap) this.onSwap();
 
     const anyMatches = this.scanForMatches();
     if (anyMatches) {
@@ -384,7 +386,7 @@ export class Engine {
       this.risePauseMs <= 0
     ) {
       this.scrollOffsetPx += (this.scrollSpeedPxPerSec * dtMs) / 1000;
-      const cellPx = 48; // renderer CELL constant; kept as a literal to avoid refactor
+      const cellPx = this.cellSize;
       // Consume as many full rows as needed (handle large dtMs)
       while (this.scrollOffsetPx >= cellPx) {
         this.scrollOffsetPx -= cellPx;
@@ -450,7 +452,7 @@ export class Engine {
           // represents the most-recent countdown length.
           this.risePauseMaxMs = this.risePauseMs;
           // Emit rainbow particles for every cleared tile
-          const cellPx = 48;
+          const cellPx = this.cellSize;
           for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
               if (this.matchMask[y][x]) {
@@ -461,7 +463,9 @@ export class Engine {
                   const speed = 160 + Math.random() * 200; // px/sec
                   const vx = Math.cos(angle) * speed;
                   const vy = -120 - Math.random() * 420; // upward bias
-                  const color = `hsl(${Math.floor(Math.random() * 360)},90%,60%)`;
+                  const color = `hsl(${Math.floor(
+                    Math.random() * 360
+                  )},90%,60%)`;
                   const size = 2 + Math.random() * 3;
                   this.particles.push({
                     x: cx,
@@ -734,8 +738,8 @@ export class Engine {
       // rows are inserted the value will decrease and the line will rise into
       // view. Finally subtract fractional scrollOffsetPx.
       winLineY:
-        this.height * 48 +
-        (this.totalLevelLines - this.rowsInserted) * 48 -
+        this.height * this.cellSize +
+        (this.totalLevelLines - this.rowsInserted) * this.cellSize -
         this.scrollOffsetPx,
       // Provide a preview of the next row that will be inserted from the
       // level queue (or an empty row when queue is empty). Renderer can use
@@ -749,7 +753,7 @@ export class Engine {
         this.levelQueue.length > 0
           ? this.levelQueue[0].slice()
           : Array.from({ length: this.width }, () => -1),
-  particles: this.particles.slice(),
+      particles: this.particles.slice(),
     };
   }
 }
