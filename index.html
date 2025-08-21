@@ -7,6 +7,13 @@
     <title>Can't Stop the Swap</title>
   </head>
   <body>
+    <!-- Dev banner: visible even if JS fails — remove after you verify Pages serves index.html -->
+    <div style="position:fixed;left:0;right:0;top:0;background:#fffbeb;color:#92400e;padding:6px 8px;font-weight:700;text-align:center;z-index:9999;">DEPLOY CHECK: index.html served (remove this banner after verification)</div>
+    <noscript>
+      <div style="margin:12px;padding:8px;background:#fee2e2;color:#7f1d1d;border-radius:6px;text-align:center;font-weight:600;">
+        JavaScript is disabled — the app requires JS to run. If the page is blank, check browser console or GH Pages deploy logs.
+      </div>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
