@@ -1,69 +1,36 @@
-# React + TypeScript + Vite
+# Can't Stop the Swap
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A small browser-based match-and-rise puzzle game built with React + TypeScript + Vite.
 
-Currently, two official plugins are available:
+Overview
+- You control a 2-tile cursor and swap adjacent gems to form matches.
+- Matching tiles clear, cause cascades, and can trigger a win when enough lines are cleared.
+- Incoming rows rise from the bottom; don't let tiles reach the top.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Controls
+- Arrow keys: move cursor
+- Z or Space: swap the two tiles under the cursor
+- X: manually raise one row
+- P: pause/unpause
+- R: reset current level
 
-## Expanding the ESLint configuration
+Title page
+- Shows a centered title image and lets you start the game or open Options.
+- Press Space or Z (on the title page) to start quickly.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Project structure (key files)
+- `src/App.tsx` — Play screen and main game wiring (engine, audio, HUD)
+- `src/main.tsx` — App entry (router + GameProvider)
+- `src/AppRoutes.tsx` — Router configuration (Title, Play, Options)
+- `src/pages/TitlePage.tsx` — Title screen component
+- `src/game-core/engine.ts` — Game logic and state (Engine class)
+- `src/renderer/canvasRenderer.ts` — Canvas rendering of the game
+- `src/levels` — Level definitions and background images
+- `src/assets` — Images, sprites, music, and sound effects
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+Notes
+- The project uses a `GameProvider` to share pause/state between routes.
+- If you add a title image, place it at `src/assets/background/csts-title.png` and the title page will display it.
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+License
+- See `LICENSE` in the repo root.

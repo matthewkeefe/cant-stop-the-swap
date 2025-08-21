@@ -7,8 +7,8 @@ import {
   type SrcRect,
 } from "./renderer/canvasRenderer";
 
-import tilesGemsPng from "./assets/sprites/graffiti.png";
-import tilesGemsXmlUrl from "./assets/sprites/graffiti.xml?url";
+import tilesGemsPng from "./assets/sprites/gems.png";
+import tilesGemsXmlUrl from "./assets/sprites/gems.xml?url";
 import { type Atlas, loadGemsAtlas } from "./atlas"; // atlas helpers moved to src/atlas.ts
 import LEVELS from "./levels";
 import snd0 from "./assets/sounds/impactMining_000.ogg?url";
@@ -140,6 +140,21 @@ export default function App() {
         return;
       }
       if (!engineRef.current) return;
+
+      // If the engine reports a win, allow advancing with Z / z / Space
+      const gs = engineRef.current.getState();
+      if (gs.hasWon) {
+        if (e.key === "z" || e.key === "Z" || e.key === " " || e.key === "Space") {
+          const idx = LEVELS.findIndex((l) => l.id === selectedLevelId);
+          const nextIdx = (idx + 1) % LEVELS.length;
+          const nextId = LEVELS[nextIdx].id;
+          setSelectedLevelId(nextId);
+          startGame(nextId);
+          return;
+        }
+        // don't allow other gameplay keys while won
+        return;
+      }
 
       switch (e.key) {
         case "ArrowLeft":
@@ -365,14 +380,12 @@ export default function App() {
           risePauseMaxMs: s.risePauseMaxMs ?? 0,
         });
 
-        // If win/loss occurred, stop any playing music
+        // If win/loss occurred, fade out any playing music
         if ((s.hasWon || s.hasLost) && musicRef.current) {
           try {
-            musicRef.current.pause();
-            musicRef.current.currentTime = 0;
+            fadeOutAndStopMusic(musicRef, 200);
           } catch {
-            // ignore
-            // ignore
+            /* ignore */
           }
         }
 
@@ -397,6 +410,49 @@ export default function App() {
     // startGame and togglePause are stable, so we can safely ignore them for this effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, atlasesReady]);
+
+  // Fade out current music smoothly over `durationMs` then stop and clear ref.
+  function fadeOutAndStopMusic(
+    mRef: React.RefObject<HTMLAudioElement | null>,
+    durationMs = 300
+  ) {
+    const m = mRef.current;
+    if (!m) return;
+    try {
+      const startVol = typeof m.volume === "number" ? m.volume : 1;
+      const start = performance.now();
+      const step = 30; // ms tick
+      const tick = () => {
+        const t = performance.now() - start;
+        const p = Math.min(1, t / durationMs);
+        try {
+          m.volume = Math.max(0, startVol * (1 - p));
+        } catch {
+          // ignore volume set errors
+        }
+        if (p >= 1) {
+          try {
+            m.pause();
+            m.currentTime = 0;
+          } catch {
+            /* ignore */
+          }
+          mRef.current = null;
+        } else {
+          setTimeout(tick, step);
+        }
+      };
+      tick();
+    } catch {
+      try {
+        m.pause();
+        m.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+      mRef.current = null;
+    }
+  }
 
   // Toggle pause: stops automatic rising and silences sounds/music
   function togglePause() {
@@ -453,16 +509,8 @@ export default function App() {
 
   // Start the game with initial settings
   function startGame(levelId?: string) {
-    // Stop previous music when starting/restarting
-    if (musicRef.current) {
-      try {
-        musicRef.current.pause();
-        musicRef.current.currentTime = 0;
-      } catch {
-        // ignore
-      }
-      musicRef.current = null;
-    }
+    // Stop previous music when starting/restarting (fade out)
+    if (musicRef.current) fadeOutAndStopMusic(musicRef, 200);
 
     // Determine effective level and inputs (prefer explicit levelId when provided)
     const effectiveLevelId = levelId ?? selectedLevelId;
@@ -538,17 +586,9 @@ export default function App() {
       }
     };
 
-    // Wire up onWin to stop music
+    // Wire up onWin to gracefully fade out music
     engineRef.current.onWin = () => {
-      if (musicRef.current) {
-        try {
-          musicRef.current.pause();
-          musicRef.current.currentTime = 0;
-        } catch {
-          // ignore
-        }
-        musicRef.current = null;
-      }
+      if (musicRef.current) fadeOutAndStopMusic(musicRef, 300);
     };
 
     // Start playing level music if provided (use effective level id)
@@ -799,7 +839,7 @@ export default function App() {
                         alignItems: "center",
                       }}
                     >
-                      {hud.hasWon ? "You win!" : "You lose!"}
+                      {hud.hasWon ? "You win!" : "Game Over!"}
                       {hud.hasWon && (
                         <button
                           style={{
@@ -822,6 +862,52 @@ export default function App() {
                           }}
                         >
                           Next Level
+                        </button>
+                      )}
+                      {hud.hasLost && (
+                        <button
+                          style={{
+                            marginTop: 18,
+                            fontSize: 20,
+                            padding: "8px 24px",
+                            borderRadius: 6,
+                            border: "none",
+                            background: "#f87171",
+                            color: "#222",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                          }}
+                          onClick={() => {
+                            // stop music and playing clones, reset engine and HUD, go to title
+                            if (musicRef.current) fadeOutAndStopMusic(musicRef, 200);
+                            for (const a of playingClonesRef.current) {
+                              try {
+                                a.pause();
+                                a.currentTime = 0;
+                              } catch {
+                                /* ignore clone stop errors */
+                              }
+                            }
+                            playingClonesRef.current = [];
+                            engineRef.current = null;
+                            setPaused(false);
+                            pausedRef.current = false;
+                            setHud({
+                              score: 0,
+                              matches: 0,
+                              chains: 0,
+                              linesEq: 0,
+                              tilesAbove: 0,
+                              hasWon: false,
+                              hasLost: false,
+                              risePauseMs: 0,
+                              risePauseMaxMs: 0,
+                            });
+                            setScene("title");
+                          }}
+                        >
+                          Return to Title
                         </button>
                       )}
                     </div>

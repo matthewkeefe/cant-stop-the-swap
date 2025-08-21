@@ -80,8 +80,8 @@ function drawGemCell(params: {
   // Keep pixel-crisp
   ctx.imageSmoothingEnabled = false;
 
-  // Gem inset (inside tile border)
-  const inset = insetPx ?? Math.max(2, Math.floor(cellSize * 0.1));
+  // Gem inset (inside tile border) — fixed 2px gap between tiles
+  const inset = insetPx ?? 2;
   const dx = px + inset;
   const dy = py + inset;
   const dw = cellSize - inset * 2;
@@ -204,8 +204,8 @@ export function drawStateToCanvas(
     const px = p.x * cellSize;
     const py = p.y * cellSize - scrollOffsetPx;
     if (fgSkin?.image && fgSkin.image.complete && fgSkin.pickSrcForColor) {
-      const { sx, sy, sw, sh } = fgSkin.pickSrcForColor(p.color);
-      const inset = Math.max(2, Math.floor(cellSize * 0.1));
+  const { sx, sy, sw, sh } = fgSkin.pickSrcForColor(p.color);
+  const inset = 2;
   ctx.save();
   // Draw falling pieces fully opaque so they render above the background
   ctx.globalAlpha = 1;
@@ -231,7 +231,7 @@ export function drawStateToCanvas(
   }
 
   // Particles (rainbow sprays)
-  const particles: any[] = (state as any).particles || [];
+  const particles = state.particles || [];
   if (particles.length > 0) {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
@@ -248,8 +248,8 @@ export function drawStateToCanvas(
 
   // Draw next row preview rising from the bottom when fractional scrolling is in progress
   const fractional = scrollOffsetPx % cellSize;
-  if (fractional > 0 && (state as any).nextRowPreview) {
-    const preview: number[] = (state as any).nextRowPreview;
+  if (fractional > 0 && state.nextRowPreview) {
+    const preview: number[] = state.nextRowPreview;
     const baseY = height * cellSize - fractional; // where the preview row's top should be
     for (let x = 0; x < width; x++) {
       const v = preview[x];
@@ -294,8 +294,8 @@ export function drawStateToCanvas(
   }
 
   // Win dashed line (if provided by engine state). Draw as a thinner dashed green-ish line.
-  if (typeof (state as any).winLineY === "number") {
-    const wY = (state as any).winLineY + 0.5;
+  if (typeof state.winLineY === "number") {
+    const wY = state.winLineY + 0.5;
     ctx.save();
     ctx.strokeStyle = "rgba(140, 255, 170, 0.9)";
     ctx.setLineDash([6, 6]);
