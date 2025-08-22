@@ -56,6 +56,9 @@ export default function App() {
   const [selectedLevelId, setSelectedLevelId] = useState<string>(
     LEVELS[0]?.id ?? "level-1"
   );
+  // Keep a ref of selectedLevelId so long-lived event handlers can read the
+  // latest value without re-registering listeners.
+  const selectedLevelIdRef = useRef<string>(selectedLevelId);
   // Preload audio elements for match/chain sounds
   const soundsRef = useRef<HTMLAudioElement[] | null>(null);
   // Preload swap sound
@@ -113,6 +116,12 @@ export default function App() {
     pausedRef.current = paused;
   }, [paused]);
 
+  // Keep selectedLevelIdRef in sync with state so the keydown handler uses
+  // the current level even though the handler is registered once on mount.
+  useEffect(() => {
+    selectedLevelIdRef.current = selectedLevelId;
+  }, [selectedLevelId]);
+
   // Auto-start once on mount if this component is used for the /play route.
   useEffect(() => {
     if (scene === "play" && !engineRef.current) {
@@ -154,12 +163,14 @@ export default function App() {
       }
       if (!engineRef.current) return;
 
-      // If the engine reports a win, allow advancing with Z / z / Space
+      // If the engine reports a win, allow advancing with Z / z / Space.
+      // Use the ref to ensure we read the latest selected level id.
       const gs = engineRef.current.getState();
       if (gs.hasWon) {
         if (e.key === "z" || e.key === "Z" || e.key === " " || e.key === "Space") {
           e.preventDefault();
-          const idx = LEVELS.findIndex((l) => l.id === selectedLevelId);
+          const currentId = selectedLevelIdRef.current;
+          const idx = LEVELS.findIndex((l) => l.id === currentId);
           const nextIdx = (idx + 1) % LEVELS.length;
           const nextId = LEVELS[nextIdx].id;
           advanceToLevel(nextId);
