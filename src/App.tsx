@@ -570,7 +570,7 @@ export default function App() {
 
   // Fade out current music smoothly over `durationMs` then stop and clear ref.
   function fadeOutAndStopMusic(
-    mRef: React.RefObject<HTMLAudioElement | null>,
+    mRef: React.MutableRefObject<HTMLAudioElement | null>,
     durationMs = 300
   ) {
     const m = mRef.current;
