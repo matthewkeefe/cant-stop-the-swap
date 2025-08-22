@@ -80,6 +80,8 @@ export default function App() {
   }
   // Music element for the currently playing level
   const musicRef = useRef<HTMLAudioElement | null>(null);
+  // Guard to prevent double-advancing to next level
+  const advancingRef = useRef(false);
   const [hud, setHud] = useState({
     score: 0,
     matches: 0,
@@ -156,11 +158,11 @@ export default function App() {
       const gs = engineRef.current.getState();
       if (gs.hasWon) {
         if (e.key === "z" || e.key === "Z" || e.key === " " || e.key === "Space") {
+          e.preventDefault();
           const idx = LEVELS.findIndex((l) => l.id === selectedLevelId);
           const nextIdx = (idx + 1) % LEVELS.length;
           const nextId = LEVELS[nextIdx].id;
-          setSelectedLevelId(nextId);
-          startGame(nextId);
+          advanceToLevel(nextId);
           return;
         }
         // don't allow other gameplay keys while won
@@ -659,6 +661,43 @@ export default function App() {
     });
   }
 
+  // Advance cleanly to the specified level id: stop audio, clear clones, reset engine and hud, then start
+  function advanceToLevel(levelId: string) {
+    if (advancingRef.current) return;
+    advancingRef.current = true;
+    try {
+      if (musicRef.current) fadeOutAndStopMusic(musicRef, 200);
+      for (const a of playingClonesRef.current) {
+        try {
+          a.pause();
+          a.currentTime = 0;
+        } catch {
+          /* ignore clone stop errors */
+        }
+      }
+      playingClonesRef.current = [];
+      engineRef.current = null;
+      setPaused(false);
+      pausedRef.current = false;
+      setHud({
+        score: 0,
+        matches: 0,
+        chains: 0,
+        linesEq: 0,
+        tilesAbove: 0,
+        hasWon: false,
+        hasLost: false,
+        risePauseMs: 0,
+        risePauseMaxMs: 0,
+      });
+      setSelectedLevelId(levelId);
+      // start the new level
+      startGame(levelId);
+    } finally {
+      advancingRef.current = false;
+    }
+  }
+
   // preset change handler removed — UI no longer exposes rise preset controls
 
   // game framework
@@ -866,10 +905,10 @@ export default function App() {
                             boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
                           }}
                           onClick={() => {
-                            const idx = LEVELS.findIndex(l => l.id === selectedLevelId);
+                            const idx = LEVELS.findIndex((l) => l.id === selectedLevelId);
                             const nextIdx = (idx + 1) % LEVELS.length;
-                            setSelectedLevelId(LEVELS[nextIdx].id);
-                            startGame(LEVELS[nextIdx].id);
+                            const nextId = LEVELS[nextIdx].id;
+                            advanceToLevel(nextId);
                           }}
                         >
                           Next Level
