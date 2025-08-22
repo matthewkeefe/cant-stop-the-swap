@@ -33,6 +33,14 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const lastCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  // Touch state for mobile pointer interactions
+  const touchStateRef = useRef<{
+    active: boolean;
+    startTime: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+  }>({ active: false, startTime: 0, startX: 0, startY: 0, moved: false });
 
   // Skins
   const backtilesAtlasRef = useRef<Atlas | null>(null);
@@ -44,6 +52,14 @@ export default function App() {
   const HEIGHT = 12;
 
   const [scene, setScene] = useState<"title" | "play">("play");
+  // Detect mobile viewport and adjust UI: on mobile we show a minimal UI.
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    try {
+      return typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width:640px)").matches;
+    } catch {
+      return false;
+    }
+  });
   const navigate = useNavigate();
   const [inputs, setInputs] = useState({
     totalLines: DEFAULT_TOTAL_LEVEL_LINES,
@@ -124,11 +140,44 @@ export default function App() {
 
   // Auto-start once on mount if this component is used for the /play route.
   useEffect(() => {
-    if (scene === "play" && !engineRef.current) {
-      startGame();
+    // If on desktop auto-start the game. On mobile, prefer the title page so
+    // the screen stays uncluttered and the player can tap Start explicitly.
+    if (!isMobile) {
+      if (scene === "play" && !engineRef.current) startGame();
+    } else {
+      // Ensure mobile viewers start on the title page
+      if (scene !== "title") setScene("title");
     }
     // run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep isMobile updated on resize / orientation change
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia("(max-width:640px)");
+    const onChange = (ev: MediaQueryListEvent) => setIsMobile(ev.matches);
+    try {
+      mq.addEventListener("change", onChange);
+    } catch {
+      // Safari fallback for older browsers without addEventListener on MediaQueryList
+      const legacy = mq as MediaQueryList & {
+        addListener?: (l: (ev: MediaQueryListEvent) => void) => void;
+        removeListener?: (l: (ev: MediaQueryListEvent) => void) => void;
+      };
+      legacy.addListener?.(onChange);
+    }
+    return () => {
+      try {
+        mq.removeEventListener("change", onChange);
+      } catch {
+        const legacy = mq as MediaQueryList & {
+          addListener?: (l: (ev: MediaQueryListEvent) => void) => void;
+          removeListener?: (l: (ev: MediaQueryListEvent) => void) => void;
+        };
+        legacy.removeListener?.(onChange);
+      }
+    };
   }, []);
 
   // Load atlases once
@@ -222,6 +271,79 @@ export default function App() {
       }
     };
     window.addEventListener("keydown", onKeyDown);
+
+    // Mobile pointer handlers: enable touch-to-move and tap-to-swap when mobile
+    const canvasEl = canvasRef.current;
+    const TAP_MAX_MS = 300;
+    const MOVE_THRESHOLD_PX = 8;
+    const onPointerDown = (ev: PointerEvent) => {
+      if (!isMobile) return;
+      if (!engineRef.current) return;
+      const rect = canvasEl!.getBoundingClientRect();
+      const px = ev.clientX - rect.left;
+      const py = ev.clientY - rect.top;
+      const cellX = Math.max(0, Math.min(WIDTH - 2, Math.floor(px / CELL)));
+      const cellY = Math.max(0, Math.min(HEIGHT - 1, Math.floor(py / CELL)));
+      engineRef.current.setCursorAbsolute(cellX, cellY);
+      lastCursorRef.current = { x: cellX, y: cellY };
+      touchStateRef.current = {
+        active: true,
+        startTime: performance.now(),
+        startX: ev.clientX,
+        startY: ev.clientY,
+        moved: false,
+      };
+      try {
+        (ev.target as Element).setPointerCapture(ev.pointerId);
+      } catch {
+        // ignore pointer capture failures on some platforms
+      }
+      ev.preventDefault();
+    };
+
+    const onPointerMove = (ev: PointerEvent) => {
+      if (!isMobile) return;
+      if (!touchStateRef.current.active) return;
+      const dx = ev.clientX - touchStateRef.current.startX;
+      const dy = ev.clientY - touchStateRef.current.startY;
+      if (Math.hypot(dx, dy) > MOVE_THRESHOLD_PX) touchStateRef.current.moved = true;
+      if (!engineRef.current) return;
+      const rect = canvasEl!.getBoundingClientRect();
+      const px = ev.clientX - rect.left;
+      const py = ev.clientY - rect.top;
+      const cellX = Math.max(0, Math.min(WIDTH - 2, Math.floor(px / CELL)));
+      const cellY = Math.max(0, Math.min(HEIGHT - 1, Math.floor(py / CELL)));
+      engineRef.current.setCursorAbsolute(cellX, cellY);
+      lastCursorRef.current = { x: cellX, y: cellY };
+      ev.preventDefault();
+    };
+
+    const onPointerUp = (ev: PointerEvent) => {
+      if (!isMobile) return;
+      if (!touchStateRef.current.active) return;
+      const duration = performance.now() - touchStateRef.current.startTime;
+      const moved = touchStateRef.current.moved;
+      touchStateRef.current.active = false;
+      try {
+        (ev.target as Element).releasePointerCapture(ev.pointerId);
+      } catch {
+        // ignore release failures
+      }
+      // Treat quick taps without movement as swap action
+      if (!moved && duration <= TAP_MAX_MS) {
+        try {
+          engineRef.current?.swap();
+        } catch { console.log("Swap failed"); }
+      }
+      ev.preventDefault();
+    };
+
+    if (canvasEl) {
+      canvasEl.addEventListener("pointerdown", onPointerDown);
+      canvasEl.addEventListener("pointermove", onPointerMove);
+      canvasEl.addEventListener("pointerup", onPointerUp);
+      canvasEl.addEventListener("pointercancel", onPointerUp);
+    }
     // Auto-pause when the tab/window loses focus
     const onVisibilityChange = () => {
       if (scene === "play" && !pausedRef.current && document.hidden) {
@@ -434,6 +556,12 @@ export default function App() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("blur", onWindowBlur);
+      if (canvasEl) {
+        canvasEl.removeEventListener("pointerdown", onPointerDown);
+        canvasEl.removeEventListener("pointermove", onPointerMove);
+        canvasEl.removeEventListener("pointerup", onPointerUp);
+        canvasEl.removeEventListener("pointercancel", onPointerUp);
+      }
       cancelAnimationFrame(raf);
     };
     // startGame and togglePause are stable, so we can safely ignore them for this effect
@@ -880,7 +1008,7 @@ export default function App() {
                     borderBottomRightRadius: 8,
                   }}
                 />
-                {scene === "play" && (hud.hasWon || hud.hasLost) && (
+                {scene === "play" && !isMobile && (hud.hasWon || hud.hasLost) && (
                   <div
                     style={{
                       position: "absolute",
@@ -982,20 +1110,49 @@ export default function App() {
                     </div>
                   </div>
                 )}
+                {/* Mobile swap button: simple floating control for tap-to-swap */}
+                {isMobile && scene === "play" && (
+                  <button
+                    onClick={() => {
+                      try {
+                        engineRef.current?.swap();
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    style={{
+                      position: "absolute",
+                      right: 12,
+                      bottom: 12,
+                      zIndex: 30,
+                      padding: "12px 16px",
+                      fontSize: 18,
+                      borderRadius: 8,
+                      border: "none",
+                      background: "#34d399",
+                      color: "#062017",
+                      boxShadow: "0 6px 18px rgba(0,0,0,0.3)",
+                    }}
+                  >
+                    Swap
+                  </button>
+                )}
               </div>
             </div>
 
-            <div style={{ fontSize: 14 }}>
+            {/* Right HUD: hide on mobile for a minimal experience */}
+            {!isMobile && (
+              <div style={{ fontSize: 14 }}>
               {/* Title and small intro moved to the right HUD */}
-              <div style={{ marginBottom: 10 }}>
-                <h2 style={{ margin: 0 }}>Can't Stop the Swap</h2>
-                {scene === "title" ? (
-                  <p style={{ marginTop: 4, opacity: 0.9 }}>
-                    Press <strong>Enter</strong> or click <strong>Start</strong>
-                    .
-                  </p>
-                ) : null}
-              </div>
+                <div style={{ marginBottom: 10 }}>
+                  <h2 style={{ margin: 0 }}>Can't Stop the Swap</h2>
+                  {scene === "title" ? (
+                    <p style={{ marginTop: 4, opacity: 0.9 }}>
+                      Press <strong>Enter</strong> or click <strong>Start</strong>
+                      .
+                    </p>
+                  ) : null}
+                </div>
 
               {/* Score HUD moved above settings */}
               {scene === "play" && (
@@ -1101,6 +1258,39 @@ export default function App() {
                 </div>
               )}
             </div>
+            )}
+
+            {/* Mobile title overlay: minimal UI with Start button */}
+            {isMobile && scene === "title" && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                <h2 style={{ margin: 0 }}>Can't Stop the Swap</h2>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => {
+                      // start selected level
+                      startGame();
+                      setScene("play");
+                    }}
+                    style={{ padding: "10px 18px", fontSize: 18 }}
+                  >
+                    Start
+                  </button>
+                  <button
+                    onClick={() => navigate("/")}
+                    style={{ padding: "10px 18px", fontSize: 18 }}
+                  >
+                    Title
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
