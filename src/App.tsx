@@ -985,6 +985,39 @@ export default function App() {
                   >
                     {paused ? "Continue" : "Pause"}
                   </button>
+                  <button
+                    onClick={() => {
+                      // Stop music and playing clones, reset engine and HUD, go to title
+                      if (musicRef.current) fadeOutAndStopMusic(musicRef, 200);
+                      for (const a of playingClonesRef.current) {
+                        try {
+                          a.pause();
+                          a.currentTime = 0;
+                        } catch {
+                          /* ignore clone stop errors */
+                        }
+                      }
+                      playingClonesRef.current = [];
+                      engineRef.current = null;
+                      setPaused(false);
+                      pausedRef.current = false;
+                      setHud({
+                        score: 0,
+                        matches: 0,
+                        chains: 0,
+                        linesEq: 0,
+                        tilesAbove: 0,
+                        hasWon: false,
+                        hasLost: false,
+                        risePauseMs: 0,
+                        risePauseMaxMs: 0,
+                      });
+                      setScene("title");
+                    }}
+                    style={{ marginLeft: 8 }}
+                  >
+                    Return to Title
+                  </button>
                   <p style={{ marginTop: 8, opacity: 0.8 }}>
                     Controls: Arrows = move • Z/Space = swap • X = raise • R =
                     reset • P = pause/continue
