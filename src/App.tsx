@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Engine } from "./game-core/engine";
 
 import {
@@ -43,6 +44,7 @@ export default function App() {
   const HEIGHT = 12;
 
   const [scene, setScene] = useState<"title" | "play">("title");
+  const navigate = useNavigate();
   const [inputs, setInputs] = useState({
     totalLines: DEFAULT_TOTAL_LEVEL_LINES,
     targetLines: 5,
@@ -904,7 +906,7 @@ export default function App() {
                               risePauseMs: 0,
                               risePauseMaxMs: 0,
                             });
-                            setScene("title");
+                            navigate("/");
                           }}
                         >
                           Return to Title
@@ -1012,7 +1014,7 @@ export default function App() {
                         risePauseMs: 0,
                         risePauseMaxMs: 0,
                       });
-                      setScene("title");
+                            navigate("/");
                     }}
                     style={{ marginLeft: 8 }}
                   >
