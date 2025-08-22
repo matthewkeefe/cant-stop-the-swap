@@ -43,7 +43,7 @@ export default function App() {
   const WIDTH = 6;
   const HEIGHT = 12;
 
-  const [scene, setScene] = useState<"title" | "play">("title");
+  const [scene, setScene] = useState<"title" | "play">("play");
   const navigate = useNavigate();
   const [inputs, setInputs] = useState({
     totalLines: DEFAULT_TOTAL_LEVEL_LINES,
@@ -110,6 +110,15 @@ export default function App() {
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
+
+  // Auto-start once on mount if this component is used for the /play route.
+  useEffect(() => {
+    if (scene === "play" && !engineRef.current) {
+      startGame();
+    }
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load atlases once
   useEffect(() => {
