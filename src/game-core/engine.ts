@@ -116,6 +116,16 @@ export class Engine {
   hasLost = false;
   private chainMultTable = [1, 2, 4, 8, 16, 32, 64];
 
+  /**
+   * Creates a new game engine instance with the specified board dimensions and number of colors.
+   *
+   * @param width - The number of columns in the game grid. Defaults to 6.
+   * @param height - The number of rows in the game grid. Defaults to 12.
+   * @param numColors - The number of distinct colors used in the game. Defaults to 5.
+   *
+   * Initializes the grid, color palette, match mask, clear line position, and cursor position.
+   * The cursor starts in the middle of the board. The mask can be set later via `setMask()`.
+   */
   constructor(width = 6, height = 12, numColors = 5) {
     this.width = width;
     this.height = height;
@@ -135,12 +145,18 @@ export class Engine {
     // mask is optional and can be set via setMask()
   }
 
-  // Provide a prebuilt queue of rows (each row is length = width). Rows are
-  // shifted in order: shiftNextRow() returns the next row to insert at bottom.
-  // rows: queue ordered so that rows[0] is the next row to be inserted at the
-  // bottom. visibleCount (optional) controls how many rows to populate into
-  // the visible grid immediately; the rest remain in this.levelQueue for
-  // future scrolling.
+  /**
+   * Sets the level queue with sanitized rows and optionally populates the visible grid.
+   *
+   * This method normalizes incoming rows to the grid width, sanitizes each row to prevent
+   * immediate horizontal or vertical triples, and simulates their insertion into a copy of
+   * the current grid for accurate sanitization. The sanitized rows are stored in the level queue.
+   * If `visibleCount` is provided, up to that many rows are inserted into the visible grid
+   * from the bottom up, and the number of inserted rows is tracked.
+   *
+   * @param rows - An array of row arrays to queue, each representing a row of numbers.
+   * @param visibleCount - Optional. The number of rows to immediately insert into the visible grid.
+   */
   setLevelQueue(rows: number[][], visibleCount?: number) {
     const want = visibleCount !== undefined ? Math.max(0, visibleCount | 0) : 0;
 
@@ -196,10 +212,21 @@ export class Engine {
     return Array.from({ length: this.width }, () => -1);
   }
 
-  // Sanitize a candidate row so it does not create immediate 3-in-a-row
-  // matches when inserted at the bottom. This removes horizontal triples
-  // within the row itself and avoids vertical triples with the two rows
-  // that will be directly above the inserted row (current bottom rows).
+  /**
+   * Sanitizes a row of color indices to prevent horizontal and vertical triples.
+   * matches when inserted at the bottom. This removes horizontal triples
+   * within the row itself and avoids vertical triples with the two rows
+   * that will be directly above the inserted row (current bottom rows).
+   * 
+   * This method ensures that no three consecutive cells in the row have the same color
+   * (horizontal triple), and that no cell creates a vertical triple with the two cells
+   * above it in the grid context. If a triple is detected, the offending cell is replaced
+   * with an alternative color not present in the forbidden set.
+   *
+   * @param row - The array of color indices representing the row to sanitize. Undefined values are replaced with -1.
+   * @param gridContext - The current grid context, used to check for vertical triples. Defaults to the engine's grid.
+   * @returns A sanitized array of color indices for the row, with no horizontal or vertical triples.
+   */
   private sanitizeRow(
     row: number[],
     gridContext: Cell[][] = this.grid
@@ -592,39 +619,64 @@ export class Engine {
     return false;
   }
 
+  /**
+   * Scans the game grid for horizontal and vertical matches of at least three consecutive cells
+   * with the same color (non-negative value). Marks matched cells in the `matchMask` and returns
+   * whether any matches were found.
+   *
+   * @returns {boolean} `true` if any matches were found and marked; otherwise, `false`.
+   *
+   * @remarks
+   * - Horizontal matches are detected row by row.
+   * - Vertical matches are detected column by column.
+   * - Only runs of three or more consecutive, occupied cells (value >= 0) with the same color are considered matches.
+   * - The `matchMask` is updated to reflect the positions of all matched cells.
+   */
   private scanForMatches(): boolean {
     this.matchMask = this.blankMask();
     let found = false;
 
+    // Scan for horizontal matches in each row.
     for (let y = 0; y < this.height; y++) {
       let runStart = 0;
+      // Iterate across the row, checking for runs of matching colors.
       for (let x = 1; x <= this.width; x++) {
         const prev = this.grid[y][x - 1];
         const curr = x < this.width ? this.grid[y][x] : Number.NaN;
+        // Check if the current cell matches the previous one and both are occupied.
         const same = x < this.width && prev >= 0 && curr >= 0 && prev === curr;
         if (!same) {
+          // If the run ends, check if it was at least 3 cells long.
           const len = x - runStart;
           if (this.grid[y][x - 1] >= 0 && len >= 3) {
             found = true;
+            // Mark all cells in the run as matched in the matchMask.
             for (let k = runStart; k < x; k++) this.matchMask[y][k] = true;
           }
+          // Start a new run.
           runStart = x;
         }
       }
     }
 
+    // Scan for vertical matches in each column.
     for (let x = 0; x < this.width; x++) {
       let runStart = 0;
+      // Iterate down the column, checking for runs of matching colors.
       for (let y = 1; y <= this.height; y++) {
         const prev = this.grid[y - 1][x];
         const curr = y < this.height ? this.grid[y][x] : Number.NaN;
+        // Check if the current cell matches the previous one and both are occupied.
         const same = y < this.height && prev >= 0 && curr >= 0 && prev === curr;
         if (!same) {
+          // If the run ends, check if it was at least 3 cells long.
           const len = y - runStart;
           if (this.grid[y - 1][x] >= 0 && len >= 3) {
             found = true;
+            // Mark all cells in the run as matched in the matchMask.
             for (let k = runStart; k < y; k++) this.matchMask[k][x] = true;
           }
+          // Start a new run.
           runStart = y;
         }
       }
@@ -632,6 +684,14 @@ export class Engine {
     return found;
   }
 
+  /**
+   * Clears matched tiles from the grid and counts the number of tiles cleared.
+   * Also determines if any cleared tiles are below a specified clear line.
+   *
+   * @returns An object containing:
+   * - `tilesCleared`: The total number of tiles cleared.
+   * - `clearedBelowLine`: `true` if any cleared tiles are below the clear line, otherwise `false`.
+   */
   private applyClearAndCount(): {
     tilesCleared: number;
     clearedBelowLine: boolean;
@@ -651,6 +711,20 @@ export class Engine {
     return { tilesCleared, clearedBelowLine };
   }
 
+  /**
+   * Initiates the settling animation for falling pieces after a swap or clear operation.
+   *
+   * This method scans each column of the grid to identify pieces that need to fall
+   * into empty spaces below them. It constructs a list of falling pieces (`fallPieces`)
+   * with their starting and target positions, color, and falling speed. The speed is
+   * determined by the current engine phase: if settling occurs immediately after a clear,
+   * a slower cascade speed is used for better visual clarity.
+   *
+   * The grid cells are updated to reflect the movement, setting the original positions
+   * of falling pieces to empty. The engine phase is then set to "settling".
+   *
+   * Note: Cells above the last gem in each column are left unchanged.
+   */
   private startSettlingAnimation() {
     //console.log('[Engine] startSettlingAnimation called');
     this.fallPieces = [];
@@ -690,6 +764,14 @@ export class Engine {
     this.phase = "settling";
   }
 
+  /**
+   * Inserts a new row at the bottom of the grid, shifting all existing rows up by one.
+   * If the top row contains any non-negative values, the insertion is aborted and `true` is returned.
+   * Otherwise, all rows are shifted up, a new sanitized row is generated and placed at the bottom,
+   * and the cursor's Y position is updated accordingly.
+   *
+   * @returns {boolean} `true` if the top row is occupied and insertion is not possible, `false` otherwise.
+   */
   private insertRowFromBottom(): boolean {
     for (let x = 0; x < this.width; x++) {
       if (this.grid[0][x] >= 0) return true;
@@ -705,6 +787,24 @@ export class Engine {
     return false;
   }
 
+  /**
+   * Returns the current game state as a `GameState` object.
+   *
+   * The returned state includes all relevant properties for rendering and logic,
+   * such as grid data, dimensions, cursor position, colors, game phase, match mask,
+   * chain count, falling pieces, score, total matches, lines cleared, target lines,
+   * auto-rise rate, rise accumulators, pause durations, clear line info, win/loss flags,
+   * scroll offset, win line position, next row preview, and active particles.
+   *
+   * - `winLineY` is calculated to represent the position of the win line, starting off-screen
+   *   and rising into view as more rows are inserted.
+   * - `nextRowPreview` provides a preview of the next row to be inserted from the level queue,
+   *   or an empty row if the queue is empty.
+   * - Arrays such as `particles` and `nextRowPreview` are returned as shallow copies to prevent
+   *   unintended mutations.
+   *
+   * @returns {GameState} The current state of the game.
+   */
   getState(): GameState {
     return {
       grid: this.grid,

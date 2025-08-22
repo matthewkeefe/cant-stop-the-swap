@@ -7,7 +7,12 @@ const TitlePage: React.FC = () => {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === " " || e.key === "Space" || e.key === "z" || e.key === "Z") {
+      if (
+        e.key === " " ||
+        e.key === "Space" ||
+        e.key === "z" ||
+        e.key === "Z"
+      ) {
         nav("/play");
       }
     };
@@ -44,8 +49,15 @@ const TitlePage: React.FC = () => {
             objectFit: "contain",
           }}
         />
-  <p style={{ marginTop: 16, opacity: 0.9 }}>Press Space or Z to start</p>
-        <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "center" }}>
+        <p style={{ marginTop: 16, opacity: 0.9 }}>Press Space or Z to start</p>
+        <div
+          style={{
+            marginTop: 12,
+            display: "flex",
+            gap: 8,
+            justifyContent: "center",
+          }}
+        >
           <button onClick={() => nav("/play")}>Start</button>
           <button onClick={() => nav("/options")}>Options</button>
         </div>

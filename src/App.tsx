@@ -167,7 +167,12 @@ export default function App() {
       // Use the ref to ensure we read the latest selected level id.
       const gs = engineRef.current.getState();
       if (gs.hasWon) {
-        if (e.key === "z" || e.key === "Z" || e.key === " " || e.key === "Space") {
+        if (
+          e.key === "z" ||
+          e.key === "Z" ||
+          e.key === " " ||
+          e.key === "Space"
+        ) {
           e.preventDefault();
           const currentId = selectedLevelIdRef.current;
           const idx = LEVELS.findIndex((l) => l.id === currentId);
@@ -427,8 +432,8 @@ export default function App() {
 
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-  window.removeEventListener("visibilitychange", onVisibilityChange);
-  window.removeEventListener("blur", onWindowBlur);
+      window.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("blur", onWindowBlur);
       cancelAnimationFrame(raf);
     };
     // startGame and togglePause are stable, so we can safely ignore them for this effect
@@ -556,7 +561,7 @@ export default function App() {
     engineRef.current = new Engine(WIDTH, HEIGHT, 5);
     engineRef.current.cellSize = CELL;
     engineRef.current.targetLines = effectiveInputs.targetLines;
-    
+
     // Use the explicit raise rate from effectiveInputs
     engineRef.current.autoRiseRateRowsPerSec = effectiveInputs.rate;
 
@@ -566,7 +571,7 @@ export default function App() {
       if (pausedRef.current) return;
       return origSwap();
     };
-    
+
     // Wire up sound callback
     engineRef.current.onMatch = (chainCount: number) => {
       // Engine.chainCount: 1 = single initial match, 2+ = cascades.
@@ -916,7 +921,9 @@ export default function App() {
                             boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
                           }}
                           onClick={() => {
-                            const idx = LEVELS.findIndex((l) => l.id === selectedLevelId);
+                            const idx = LEVELS.findIndex(
+                              (l) => l.id === selectedLevelId
+                            );
                             const nextIdx = (idx + 1) % LEVELS.length;
                             const nextId = LEVELS[nextIdx].id;
                             advanceToLevel(nextId);
@@ -941,7 +948,8 @@ export default function App() {
                           }}
                           onClick={() => {
                             // stop music and playing clones, reset engine and HUD, go to title
-                            if (musicRef.current) fadeOutAndStopMusic(musicRef, 200);
+                            if (musicRef.current)
+                              fadeOutAndStopMusic(musicRef, 200);
                             for (const a of playingClonesRef.current) {
                               try {
                                 a.pause();
@@ -983,8 +991,8 @@ export default function App() {
                 <h2 style={{ margin: 0 }}>Can't Stop the Swap</h2>
                 {scene === "title" ? (
                   <p style={{ marginTop: 4, opacity: 0.9 }}>
-                    Press <strong>Enter</strong> or click{" "}
-                    <strong>Start</strong>.
+                    Press <strong>Enter</strong> or click <strong>Start</strong>
+                    .
                   </p>
                 ) : null}
               </div>
@@ -1073,7 +1081,7 @@ export default function App() {
                         risePauseMs: 0,
                         risePauseMaxMs: 0,
                       });
-                            navigate("/");
+                      navigate("/");
                     }}
                     style={{ marginLeft: 8 }}
                   >
