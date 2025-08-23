@@ -1,0 +1,222 @@
+[
+  {
+    "id": "level-1",
+    "name": "Level 1",
+    "shortName": "1",
+    "background": "../assets/background/graffiti-csts.png",
+    "color": "#00FFFF",
+    "startingLines": 6,
+    "targetLines": 5,
+    "raiseRate": 0.0,
+    "music": "../assets/music/prism-two.mp3"
+  },
+  {
+    "id": "level-2",
+    "name": "Level 2",
+    "shortName": "2",
+    "background": "../assets/background/graffiti-wave.png",
+    "color": "#FF4F81",
+    "startingLines": 4,
+    "targetLines": 10,
+    "raiseRate": 0.052632,
+    "music": "../assets/music/streetwalk-arcade.mp3"
+  },
+  {
+    "id": "level-3",
+    "name": "Level 3",
+    "shortName": "3",
+    "background": "../assets/background/graffiti-desert.png",
+    "color": "#FF4500",
+    "startingLines": 8,
+    "targetLines": 10,
+    "raiseRate": 0.105263,
+    "music": "../assets/music/graffiti-groove.mp3"
+  },
+  {
+    "id": "level-4",
+    "name": "Level 4",
+    "shortName": "4",
+    "background": "../assets/background/graffiti-owls.png",
+    "color": "#ADFF2F",
+    "startingLines": 6,
+    "targetLines": 10,
+    "raiseRate": 0.157895,
+    "music": "../assets/music/streetlights.mp3"
+  },
+  {
+    "id": "level-5",
+    "name": "Level 5",
+    "shortName": "5",
+    "background": "../assets/background/graffiti-mountain.png",
+    "color": "#1E90FF",
+    "startingLines": 7,
+    "targetLines": 10,
+    "raiseRate": 0.210526,
+    "music": "../assets/music/streetwalk-arcade.mp3"
+  },
+  {
+    "id": "level-6",
+    "name": "Level 6",
+    "shortName": "6",
+    "background": "../assets/background/graffiti-phoenix.png",
+    "color": "#FFD700",
+    "startingLines": 6,
+    "targetLines": 10,
+    "raiseRate": 0.263158,
+    "music": "../assets/music/upbeat-city-lights.mp3"
+  },
+  {
+    "id": "level-7",
+    "name": "Level 7",
+    "shortName": "7",
+    "background": "../assets/background/graffiti-tiger.png",
+    "color": "#40E0D0",
+    "startingLines": 7,
+    "targetLines": 10,
+    "raiseRate": 0.315789,
+    "music": "../assets/music/breakdown.mp3"
+  },
+  {
+    "id": "level-8",
+    "name": "Level 8",
+    "shortName": "8",
+    "background": "../assets/background/graffiti-panther.png",
+    "color": "#FF00FF",
+    "startingLines": 6,
+    "targetLines": 10,
+    "raiseRate": 0.368421,
+    "music": "../assets/music/upbeat-city-lights.mp3"
+  },
+  {
+    "id": "level-9",
+    "name": "Level 9",
+    "shortName": "9",
+    "background": "../assets/background/graffiti-sunglasses.png",
+    "color": "#FF69B4",
+    "startingLines": 3,
+    "targetLines": 10,
+    "raiseRate": 0.421053,
+    "music": "../assets/music/graffiti-groove.mp3"
+  },
+  {
+    "id": "level-10",
+    "name": "Level 10",
+    "shortName": "10",
+    "background": "../assets/background/graffiti-skull.png",
+    "color": "#00FF7F",
+    "startingLines": 6,
+    "targetLines": 10,
+    "raiseRate": 0.473684,
+    "music": "../assets/music/streetwalk-arcade.mp3"
+  },
+  {
+    "id": "level-11",
+    "name": "Level 11",
+    "shortName": "11",
+    "background": "../assets/background/graffiti-car.png",
+    "color": "#00BFFF",
+    "startingLines": 8,
+    "targetLines": 10,
+    "raiseRate": 0.526316,
+    "music": "../assets/music/graffiti-groove.mp3"
+  },
+  {
+    "id": "level-12",
+    "name": "Level 12",
+    "shortName": "12",
+    "background": "../assets/background/graffiti-ghost.png",
+    "color": "#FFD700",
+    "startingLines": 4,
+    "targetLines": 10,
+    "raiseRate": 0.578947,
+    "music": "../assets/music/streetlights.mp3"
+  },
+  {
+    "id": "level-13",
+    "name": "Level 13",
+    "shortName": "13",
+    "background": "../assets/background/graffiti-lantern.png",
+    "color": "#1E90FF",
+    "startingLines": 6,
+    "targetLines": 10,
+    "raiseRate": 0.631579,
+    "music": "../assets/music/breakdown.mp3"
+  },
+  {
+    "id": "level-14",
+    "name": "Level 14",
+    "shortName": "14",
+    "background": "../assets/background/graffiti-dragon.png",
+    "color": "#FF4500",
+    "startingLines": 7,
+    "targetLines": 10,
+    "raiseRate": 0.684211,
+    "music": "../assets/music/breakdown.mp3"
+  },
+  {
+    "id": "level-15",
+    "name": "Level 15",
+    "shortName": "15",
+    "background": "../assets/background/graffiti-boombox.png",
+    "color": "#39FF14",
+    "startingLines": 4,
+    "targetLines": 10,
+    "raiseRate": 0.736842,
+    "music": "../assets/music/streetwalk-arcade.mp3"
+  },
+  {
+    "id": "level-16",
+    "name": "Level 16",
+    "shortName": "16",
+    "background": "../assets/background/graffiti-icecream.png",
+    "color": "#ADFF2F",
+    "startingLines": 6,
+    "targetLines": 10,
+    "raiseRate": 0.789474,
+    "music": "../assets/music/streetwalk-arcade.mp3"
+  },
+  {
+    "id": "level-17",
+    "name": "Level 17",
+    "shortName": "17",
+    "background": "../assets/background/graffiti-controller.png",
+    "color": "#00FFFF",
+    "startingLines": 5,
+    "targetLines": 10,
+    "raiseRate": 0.842105,
+    "music": "../assets/music/upbeat-city-lights.mp3"
+  },
+  {
+    "id": "level-18",
+    "name": "Level 18",
+    "shortName": "18",
+    "background": "../assets/background/graffiti-rocket.png",
+    "color": "#DC143C",
+    "startingLines": 6,
+    "targetLines": 10,
+    "raiseRate": 0.894737,
+    "music": "../assets/music/upbeat-city-lights.mp3"
+  },
+  {
+    "id": "level-19",
+    "name": "Level 19",
+    "shortName": "19",
+    "background": "../assets/background/graffiti-astronaut.png",
+    "color": "#FFFF00",
+    "startingLines": 7,
+    "targetLines": 10,
+    "raiseRate": 0.947368,
+    "music": "../assets/music/graffiti-groove.mp3"
+  },
+  {
+    "id": "level-20",
+    "name": "Level 20",
+    "shortName": "20",
+    "background": "../assets/background/graffiti-stars.png",
+    "color": "#FF1493",
+    "startingLines": 5,
+    "targetLines": 10,
+    "raiseRate": 1.0,
+    "music": "../assets/music/breakdown.mp3"
+  }
+]

@@ -15,6 +15,11 @@ const OptionsPage: React.FC = () => {
   useEffect(() => {
     try {
       localStorage.setItem("musicVolume", String(music));
+      try {
+        window.dispatchEvent(new CustomEvent("volumechange", { detail: { music } }));
+      } catch (e) {
+        void e;
+      }
     } catch (e) {
       void e;
       // ignore storage errors (e.g., private mode)
@@ -24,6 +29,11 @@ const OptionsPage: React.FC = () => {
   useEffect(() => {
     try {
       localStorage.setItem("sfxVolume", String(sfx));
+      try {
+        window.dispatchEvent(new CustomEvent("volumechange", { detail: { sfx } }));
+      } catch (e) {
+        void e;
+      }
     } catch (e) {
       void e;
       // ignore storage errors (e.g., private mode)

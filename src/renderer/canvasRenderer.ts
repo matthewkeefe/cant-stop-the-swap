@@ -74,7 +74,7 @@ export function drawStateToCanvas(
   fgSkin?: Skin,
   canvasBgImage?: HTMLImageElement | null
 ) {
-  const { width, height, grid, colors, cursorX, cursorY, phase, fallPieces, clearLineY } = state;
+  const { width, height, grid, colors, phase, fallPieces, clearLineY } = state;
   const showClearLine = (state.linesClearedEq ?? 0) >= (state.targetLines ?? 0);
 
   blinkT = (blinkT + dtMs) % FADE_MS;
@@ -165,9 +165,7 @@ export function drawStateToCanvas(
   // longer draws the solid white win threshold so the UI can supply a
   // styled, accessible bar that animates independently of the canvas.
 
-  const cx = cursorX * cellSize;
-  const cy = cursorY * cellSize - scrollOffsetPx;
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "#ffffff";
-  ctx.strokeRect(cx + 1.5, cy + 1.5, cellSize * 2 - 3, cellSize - 3);
+  // Cursor outline is rendered as a DOM/SVG overlay in the App so it can
+  // appear above DOM elements (e.g. WinLine). Do not draw it here to avoid
+  // duplicate visuals.
 }

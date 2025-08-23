@@ -145,8 +145,7 @@ const LevelSelectPage: React.FC = () => {
                 const { textColor, textShadow } = readableTextAndShadow(lvl.color);
                 return (
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <div style={{ fontSize: 14, opacity: 0.85, color: textColor, textShadow }}>{`#${LEVELS.indexOf(lvl) + 1}`}</div>
-                    <div style={{ fontSize: 16, color: textColor, textShadow }}>{lvl.name}</div>
+                    <div style={{ fontSize: 16, color: textColor, textShadow }}>{lvl.shortName}</div>
                   </div>
                 );
               })()}

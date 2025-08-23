@@ -13,7 +13,13 @@ const TitlePage: React.FC = () => {
         e.key === "z" ||
         e.key === "Z"
       ) {
-        nav("/play");
+        try {
+          localStorage.removeItem("selectedLevelId");
+        } catch (e) {
+          void e;
+        }
+        // Explicitly request level-1 when starting from Title
+        nav("/play", { state: { startLevelId: "level-1" } });
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -58,7 +64,19 @@ const TitlePage: React.FC = () => {
             justifyContent: "center",
           }}
         >
-          <button onClick={() => nav("/play")}>Start</button>
+          <button
+              onClick={() => {
+                try {
+                  localStorage.removeItem("selectedLevelId");
+                } catch (e) {
+                  void e;
+                }
+                // Explicitly start level-1 when launching from title
+                nav("/play", { state: { startLevelId: "level-1" } });
+              }}
+          >
+            Start
+          </button>
           <button onClick={() => nav("/levels")} aria-label="Select level">Levels</button>
           <button onClick={() => nav("/options")}>Options</button>
         </div>

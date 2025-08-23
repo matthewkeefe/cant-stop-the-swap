@@ -30,6 +30,10 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
         fillText: () => {},
         measureText: () => ({ width: 0 }),
         globalCompositeOperation: 'source-over',
+  // Provide arcTo and styling props used by the renderer
+  arcTo: () => {},
+  lineJoin: 'round',
+  lineCap: 'round',
       } as unknown;
     }
     return null;
@@ -61,4 +65,36 @@ globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
 };
 globalThis.cancelAnimationFrame = (id: number) => {
   clearTimeout(id as unknown as NodeJS.Timeout);
+};
+
+// Silence specific noisy warnings during test runs without hiding other logs.
+// We only filter well-known messages that are safe to ignore in tests.
+const _origWarn = console.warn.bind(console);
+const _origError = console.error.bind(console);
+
+console.warn = (...args: unknown[]) => {
+  try {
+    const text = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+    // React Router future-flag warnings are noisy in tests; filter them.
+    if (/React Router Future Flag Warning|v7_startTransition|v7_relativeSplatPath/.test(text)) {
+      return;
+    }
+  } catch {
+    // fall through to original warn
+  }
+  _origWarn(...(args as unknown[]));
+};
+
+console.error = (...args: unknown[]) => {
+  try {
+    const text = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+    // Suppress the common React "not wrapped in act(...)" warning in tests
+    // which is benign for our environment and triggers many false positives.
+    if (/not wrapped in act\(|wrap-tests-with-act|An update to .* inside a test was not wrapped in act/.test(text)) {
+      return;
+    }
+  } catch {
+    // fall through to original error
+  }
+  _origError(...(args as unknown[]));
 };

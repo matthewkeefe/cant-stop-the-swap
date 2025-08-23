@@ -5,7 +5,6 @@ export type Level = {
   // URL for background image, or null for none (transparent)
   background: string | null;
   color: string | null;
-  totalLines: number;
   startingLines: number;
   targetLines: number;
   raiseRate: number; // rows per second

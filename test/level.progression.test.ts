@@ -11,9 +11,7 @@ describe("Level progression utilities", () => {
 
     expect(getNextLevelId(levels, "level-1")).toBe("level-2");
     expect(getNextLevelId(levels, "level-2")).toBe("level-3");
-    // wrap
     expect(getNextLevelId(levels, "level-3")).toBe("level-1");
-    // unknown id -> first
     expect(getNextLevelId(levels, "nope")).toBe("level-1");
   });
 });

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import WinLine from "./ui/WinLine";
 import { useNavigate } from "react-router-dom";
 import { Engine } from "./game-core/engine";
@@ -20,11 +21,8 @@ import snd3 from "./assets/sounds/impactMining_003.ogg?url";
 import snd4 from "./assets/sounds/impactMining_004.ogg?url";
 import swapSnd from "./assets/sounds/swap.ogg?url";
 
-// This is the total number of lines that will be used to determine the win condition.
-// The engine will add +16 overflow rows to this total for the level queue.
-// This allows the player to have some overflow space to play with before reaching the win line.
-// The player wins when they clear the target lines, which is set in the game options.
-const DEFAULT_TOTAL_LEVEL_LINES = 10; // Default total lines for the level queue
+// Default target lines used when a level doesn't provide one.
+const DEFAULT_TARGET_LINES = 10;
 
 // Preset keys removed — use a single explicit raise rate in inputs
 
@@ -47,6 +45,8 @@ export default function App() {
   const backtilesAtlasRef = useRef<Atlas | null>(null);
   const tilesBlackAtlasRef = useRef<Atlas | null>(null);
   const [atlasesReady, setAtlasesReady] = useState(false);
+  // DOM overlay for the cursor so it can appear above DOM WinLine
+  const cursorOverlayRef = useRef<HTMLDivElement | null>(null);
 
   const CELL = 64;
   const WIDTH = 6;
@@ -66,8 +66,8 @@ export default function App() {
     }
   });
   const navigate = useNavigate();
+  const location = useLocation();
   const [inputs, setInputs] = useState({
-    totalLines: DEFAULT_TOTAL_LEVEL_LINES,
     targetLines: 5,
     startingLines: 5,
     // single raise rate setting (rows per second)
@@ -98,6 +98,8 @@ export default function App() {
   // Pause state (pause stops automatic rising and mutes future sounds)
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(paused);
+  // Whether the current pause was caused by losing window/tab focus (visibility/blur)
+  const pausedByFocusRef = useRef(false);
   // Remember previous scroll speed so we can restore after unpausing
   const prevScrollSpeedRef = useRef<number | null>(null);
   if (!soundsRef.current) {
@@ -154,8 +156,61 @@ export default function App() {
     }
 
     window.addEventListener("storage", onStorage);
+    // Also listen for same-tab volume update events dispatched by OptionsPage
+    const onVolumeEvent = (ev: Event) => {
+      try {
+        const d = (ev as CustomEvent).detail as { music?: number; sfx?: number } | undefined;
+        if (d) {
+          if (typeof d.music === "number") setMusicVolume(Math.max(0, Math.min(1, d.music)));
+          if (typeof d.sfx === "number") setSfxVolume(Math.max(0, Math.min(1, d.sfx)));
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener("volumechange", onVolumeEvent as EventListener);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  // Apply volume settings to currently playing audio elements when they change
+  useEffect(() => {
+    try {
+      if (musicRef.current) {
+        try {
+          musicRef.current.volume = musicVolume;
+        } catch {
+          /* ignore */
+        }
+      }
+      // Update preloaded SFX and swap element volumes
+      if (soundsRef.current) {
+        for (const s of soundsRef.current) {
+          try {
+            s.volume = sfxVolume;
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+      if (swapRef.current) {
+        try {
+          swapRef.current.volume = sfxVolume;
+        } catch {
+          /* ignore */
+        }
+      }
+      // Update any currently playing clones so volume slider takes immediate effect
+      for (const a of playingClonesRef.current) {
+        try {
+          a.volume = sfxVolume;
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [musicVolume, sfxVolume]);
 
   // When a level is selected, copy its settings into the inputs so Start uses them.
   useEffect(() => {
@@ -163,7 +218,6 @@ export default function App() {
     if (lvl) {
       setInputs((p) => ({
         ...p,
-        totalLines: lvl.totalLines,
         startingLines: lvl.startingLines,
         targetLines: lvl.targetLines,
         rate: lvl.raiseRate,
@@ -187,7 +241,13 @@ export default function App() {
     // If on desktop auto-start the game. On mobile, prefer the title page so
     // the screen stays uncluttered and the player can tap Start explicitly.
     if (!isMobile) {
-      if (scene === "play" && !engineRef.current) startGame();
+      if (scene === "play" && !engineRef.current) {
+  // If navigation provided a startLevelId, use it; otherwise start default
+  const navState = (location as unknown as { state?: { startLevelId?: string } })?.state;
+        const startLevelId = navState?.startLevelId;
+        if (startLevelId) startGame(startLevelId);
+        else startGame();
+      }
     } else {
       // Ensure mobile viewers start on the title page
       if (scene !== "title") setScene("title");
@@ -223,6 +283,100 @@ export default function App() {
       }
     };
   }, []);
+
+  // Fade out current music smoothly over `durationMs` then stop and clear ref.
+  const fadeOutAndStopMusic = useCallback(
+    (mRef: React.MutableRefObject<HTMLAudioElement | null>, durationMs = 300) => {
+      const m = mRef.current;
+      if (!m) return;
+      try {
+        const startVol = typeof m.volume === "number" ? m.volume : musicVolume;
+        const start = performance.now();
+        const step = 30; // ms tick
+        const tick = () => {
+          const t = performance.now() - start;
+          const p = Math.min(1, t / durationMs);
+          try {
+            m.volume = Math.max(0, startVol * (1 - p));
+          } catch {
+            // ignore volume set errors
+          }
+          if (p >= 1) {
+            try {
+              m.pause();
+              m.currentTime = 0;
+            } catch {
+              /* ignore */
+            }
+            mRef.current = null;
+          } else {
+            setTimeout(tick, step);
+          }
+        };
+        tick();
+      } catch {
+        try {
+          m.pause();
+          m.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
+        mRef.current = null;
+      }
+    },
+    [musicVolume]
+  );
+
+  // Pause music and stop playing SFX when navigating away from the /play route
+  useEffect(() => {
+    try {
+      const path = location.pathname || "";
+      // Treat any route under /play as the active game.
+      if (path.startsWith("/play")) return;
+
+      // If navigating to Title, Options, or Level Select, gracefully fade out music
+      if (path === "/" || path.startsWith("/options") || path.startsWith("/levels")) {
+        if (musicRef.current) {
+          try {
+            fadeOutAndStopMusic(musicRef, 200);
+          } catch (e) {
+            void e;
+            try {
+              musicRef.current.pause();
+              musicRef.current.currentTime = 0;
+            } catch (ee) {
+              void ee;
+            }
+            musicRef.current = null;
+          }
+        }
+      } else {
+        // Other non-play routes: ensure music is stopped immediately
+        if (musicRef.current) {
+          try {
+            musicRef.current.pause();
+            musicRef.current.currentTime = 0;
+          } catch {
+            /* ignore */
+          }
+          musicRef.current = null;
+        }
+      }
+
+      // Stop any playing cloned SFX in all non-play cases
+      for (const a of playingClonesRef.current) {
+        try {
+          a.pause();
+          a.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
+      }
+      playingClonesRef.current = [];
+    } catch {
+      /* ignore */
+    }
+  }, [location.pathname, fadeOutAndStopMusic]);
 
   // Load atlases once
   useEffect(() => {
@@ -394,20 +548,24 @@ export default function App() {
     // Auto-pause when the tab/window loses focus
     const onVisibilityChange = () => {
       if (scene === "play" && !pausedRef.current && document.hidden) {
-        // behave as if pause button was pressed
-        togglePause();
+    // behave as if pause button was pressed
+    pausedByFocusRef.current = true;
+    togglePause();
       }
     };
 
     const onWindowBlur = () => {
       if (scene === "play" && !pausedRef.current) {
-        // behave as if pause button was pressed
-        togglePause();
+    // behave as if pause button was pressed
+    pausedByFocusRef.current = true;
+    togglePause();
       }
     };
 
     window.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("blur", onWindowBlur);
+
+    
 
     let raf = 0;
     let last = performance.now();
@@ -602,6 +760,60 @@ export default function App() {
         }
 
         canvas.style.filter = s.hasWon || s.hasLost ? "blur(3px)" : "none";
+
+        // Update DOM cursor overlay to sit above WinLine (if present)
+        try {
+          const overlay = cursorOverlayRef.current;
+          if (overlay) {
+            const childId = "dom-cursor-box";
+            let child = overlay.querySelector<HTMLDivElement>(`#${childId}`);
+            const cx = s.cursorX * CELL + 1.5;
+            const cy = s.cursorY * CELL - (s.scrollOffsetPx ?? 0) + 1.5;
+            const w = CELL * 2 - 3;
+            const h = CELL - 3;
+            const radius = Math.min(10, Math.max(4, Math.floor(CELL * 0.12)));
+            if (!child) {
+              // Create an SVG element with an animated gradient stroke and dashed rounded rect
+              const strokeWidth = 3;
+              const dashLen = Math.max(8, Math.round(CELL * 0.2));
+              const dashGap = Math.max(6, Math.round(CELL * 0.12));
+              const svg = `
+                <svg id="${childId}" xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="position:absolute; left:0; top:0; pointer-events:none; overflow:visible;">
+                  <defs>
+                    <linearGradient id="cursor-grad" gradientUnits="objectBoundingBox">
+                      <stop offset="0%" stop-color="#ff3b3b" />
+                      <stop offset="16%" stop-color="#ffb13b" />
+                      <stop offset="33%" stop-color="#fff23b" />
+                      <stop offset="50%" stop-color="#3bff70" />
+                      <stop offset="66%" stop-color="#3bdcff" />
+                      <stop offset="83%" stop-color="#8a3bff" />
+                      <stop offset="100%" stop-color="#ff3b3b" />
+                      <animateTransform attributeName="gradientTransform" type="rotate" from="0 0.5 0.5" to="360 0.5 0.5" dur="6s" repeatCount="indefinite" />
+                    </linearGradient>
+                    <!-- Neon glow filter -->
+                    <filter id="cursor-glow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+                  <rect x="${strokeWidth / 2}" y="${strokeWidth / 2}" rx="${radius}" ry="${radius}" width="${w - strokeWidth}" height="${h - strokeWidth}" fill="none"
+                    stroke="url(#cursor-grad)" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashLen} ${dashGap}" filter="url(#cursor-glow)" />
+                </svg>
+              `;
+              overlay.insertAdjacentHTML("beforeend", svg);
+              child = overlay.querySelector<HTMLDivElement>(`#${childId}`) as unknown as HTMLDivElement;
+            }
+            // position the SVG overlay to match canvas cursor
+            child.style.width = `${w}px`;
+            child.style.height = `${h}px`;
+            child.style.transform = `translate(${Math.round(cx)}px, ${Math.round(cy)}px)`;
+          }
+        } catch {
+          /* ignore overlay positioning errors */
+        }
       } else {
         // Title scene: clear
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -629,48 +841,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, atlasesReady]);
 
-  // Fade out current music smoothly over `durationMs` then stop and clear ref.
-  function fadeOutAndStopMusic(
-    mRef: React.MutableRefObject<HTMLAudioElement | null>,
-    durationMs = 300
-  ) {
-    const m = mRef.current;
-    if (!m) return;
-    try {
-  const startVol = typeof m.volume === "number" ? m.volume : musicVolume;
-      const start = performance.now();
-      const step = 30; // ms tick
-      const tick = () => {
-        const t = performance.now() - start;
-        const p = Math.min(1, t / durationMs);
-        try {
-          m.volume = Math.max(0, startVol * (1 - p));
-        } catch {
-          // ignore volume set errors
-        }
-        if (p >= 1) {
-          try {
-            m.pause();
-            m.currentTime = 0;
-          } catch {
-            /* ignore */
-          }
-          mRef.current = null;
-        } else {
-          setTimeout(tick, step);
-        }
-      };
-      tick();
-    } catch {
-      try {
-        m.pause();
-        m.currentTime = 0;
-      } catch {
-        /* ignore */
-      }
-      mRef.current = null;
-    }
-  }
+  // (single fadeOutAndStopMusic defined above with useCallback)
 
   // Toggle pause: stops automatic rising and silences sounds/music
   function togglePause() {
@@ -703,6 +874,8 @@ export default function App() {
       }
       playingClonesRef.current = [];
     } else {
+  // Clearing focus-caused pause since this is a user-initiated resume
+  pausedByFocusRef.current = false;
       // Unpause: restore previous scroll speed
       if (engineRef.current && prevScrollSpeedRef.current !== null) {
         engineRef.current.scrollSpeedPxPerSec = prevScrollSpeedRef.current;
@@ -733,14 +906,15 @@ export default function App() {
     // Determine effective level and inputs (prefer explicit levelId when provided)
     const effectiveLevelId = levelId ?? selectedLevelId;
     const lvlForStart = LEVELS.find((l) => l.id === effectiveLevelId);
-    const effectiveInputs = lvlForStart
+    type EffectiveInputs = { targetLines: number; startingLines: number; rate: number };
+
+    const effectiveInputs: EffectiveInputs = lvlForStart
       ? {
-          totalLines: lvlForStart.totalLines,
-          startingLines: lvlForStart.startingLines,
           targetLines: lvlForStart.targetLines,
+          startingLines: lvlForStart.startingLines,
           rate: lvlForStart.raiseRate,
         }
-      : inputs;
+      : (inputs as unknown as EffectiveInputs);
 
     // Reflect chosen level settings in the UI
     if (lvlForStart) {
@@ -825,10 +999,11 @@ export default function App() {
       }
     }
 
-    // Build prebuilt queue: totalLines + 16 overflow rows
+    // Build prebuilt queue: targetLines + 16 overflow rows
     const total = Math.max(
       1,
-      effectiveInputs.totalLines || DEFAULT_TOTAL_LEVEL_LINES
+      // prefer explicit targetLines; fall back to a sane default
+  effectiveInputs.targetLines || DEFAULT_TARGET_LINES
     );
     const queueLen = total + 16;
     const rows: number[][] = [];
@@ -852,7 +1027,10 @@ export default function App() {
 
     // Set the totalLevelLines so engine computes the rising win line; the
     // engine will add the +16 rows already included above.
-    engineRef.current.totalLevelLines = total;
+  // Set totalLevelLines so engine computes the rising win line; the
+  // engine will add the +16 rows already included above. We use the
+  // configured targetLines as the total for the engine's win-line math.
+  engineRef.current.totalLevelLines = total;
 
     setScene("play");
     setHud({
@@ -885,7 +1063,8 @@ export default function App() {
       playingClonesRef.current = [];
       engineRef.current = null;
       setPaused(false);
-      pausedRef.current = false;
+  pausedRef.current = false;
+  pausedByFocusRef.current = false;
       setHud({
         score: 0,
         matches: 0,
@@ -975,6 +1154,20 @@ export default function App() {
                   width={WIDTH * CELL}
                   height={HEIGHT * CELL}
                   style={{ borderRadius: 8, position: "relative", zIndex: 1000 }}
+                />
+                {/* Cursor overlay: positioned absolutely over the canvas so it can appear above DOM WinLine */}
+                <div
+                  ref={cursorOverlayRef}
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    width: WIDTH * CELL,
+                    height: HEIGHT * CELL,
+                    pointerEvents: "none",
+                    zIndex: 1400,
+                  }}
                 />
                 {/* Inline Chain Gauge: 8px tall, sits inside the board container at the top */}
                 <div
@@ -1098,6 +1291,7 @@ export default function App() {
                       risePauseMs: 0,
                       risePauseMaxMs: 0,
                     });
+                    pausedByFocusRef.current = false;
                     navigate("/");
                   }}
                   style={{
@@ -1128,7 +1322,7 @@ export default function App() {
                   aria-label="Options"
                   style={{
                     position: "absolute",
-                    right: 72,
+                    right: 124,
                     top: 8,
                     zIndex: 1300,
                     padding: "6px 10px",
@@ -1154,7 +1348,7 @@ export default function App() {
                   aria-label="Levels"
                   style={{
                     position: "absolute",
-                    right: 40,
+                    right: 60,
                     top: 8,
                     zIndex: 1300,
                     padding: "6px 10px",
@@ -1266,6 +1460,7 @@ export default function App() {
                                 risePauseMs: 0,
                                 risePauseMaxMs: 0,
                               });
+                              pausedByFocusRef.current = false;
                               navigate("/");
                             }}
                           >
@@ -1275,6 +1470,57 @@ export default function App() {
                       </div>
                     </div>
                   )}
+                {/* Continue overlay for focus-caused pause */}
+                {scene === "play" && !isMobile && paused && pausedByFocusRef.current && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "grid",
+                      placeItems: "center",
+                      color: "#fff",
+                      textShadow: "0 2px 8px rgba(0,0,0,0.6)",
+                      fontWeight: 700,
+                      fontSize: 32,
+                      letterSpacing: 1,
+                      zIndex: 1200,
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "12px 16px",
+                        borderRadius: 8,
+                        background: "rgba(0,0,0,0.5)",
+                        border: "1px solid rgba(255,255,255,0.2)",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div>Paused - Click Continue to resume</div>
+                      <button
+                        style={{
+                          marginTop: 18,
+                          fontSize: 20,
+                          padding: "8px 24px",
+                          borderRadius: 6,
+                          border: "none",
+                          background: "#34d399",
+                          color: "#222",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                        }}
+                        onClick={() => {
+                          pausedByFocusRef.current = false;
+                          togglePause();
+                        }}
+                      >
+                        Continue
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {/* Mobile swap button: simple floating control for tap-to-swap */}
                 {isMobile && scene === "play" && (
                   <button
@@ -1347,6 +1593,7 @@ export default function App() {
                   <div style={{ display: "block", marginBottom: 6 }}>
                     Level: <strong style={{ marginLeft: 8 }}>{LEVELS.find(l => l.id === selectedLevelId)?.name}</strong>
                   </div>
+                  {/* level selection is handled on the LevelSelect page; keep name display only */}
                 </div>
 
                 {scene === "play" ? (
