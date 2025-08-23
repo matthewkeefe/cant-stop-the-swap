@@ -42,7 +42,6 @@ export type GameState = {
   risePauseMs: number;
   risePauseMaxMs: number;
   clearLineY: number;
-  showClearLine: boolean;
   hasWon: boolean;
   hasLost: boolean;
   // fractional upward scroll in pixels (renderer should subtract this)
@@ -111,7 +110,6 @@ export class Engine {
   // the most recent total pause duration used to render a progress bar (ms)
   risePauseMaxMs = 0;
   clearLineY: number;
-  showClearLine = false;
   hasWon = false;
   hasLost = false;
   private chainMultTable = [1, 2, 4, 8, 16, 32, 64];
@@ -462,10 +460,7 @@ export class Engine {
           const lineEq = Math.floor(tilesCleared / this.width);
           if (lineEq > 0) this.linesClearedEq += lineEq;
 
-          if (!this.showClearLine && this.linesClearedEq >= this.targetLines) {
-            this.showClearLine = true;
-          }
-          if (this.showClearLine && clearedBelowLine) {
+          if (this.linesClearedEq >= this.targetLines && clearedBelowLine) {
             this.hasWon = true;
             return;
           }
@@ -581,8 +576,8 @@ export class Engine {
       }
       return;
     }
-    // Expose scroll offset in state for renderer
-    // (no-op here; getState will include scrollOffsetPx)
+  // Expose scroll offset in state for renderer
+  // (no-op here; getState will include scrollOffsetPx)
   }
 
   // Insert row using prebuilt queue (or empty) - shifts grid up by one row
@@ -702,8 +697,7 @@ export class Engine {
       for (let x = 0; x < this.width; x++) {
         if (this.matchMask[y][x]) {
           tilesCleared++;
-          if (this.showClearLine && y >= this.clearLineY)
-            clearedBelowLine = true;
+          if (y >= this.clearLineY) clearedBelowLine = true;
           this.grid[y][x] = -1;
         }
       }
@@ -825,8 +819,7 @@ export class Engine {
       riseAccumRows: this.riseAccumRows,
       risePauseMs: this.risePauseMs,
       risePauseMaxMs: this.risePauseMaxMs,
-      clearLineY: this.clearLineY,
-      showClearLine: this.showClearLine,
+  clearLineY: this.clearLineY,
       hasWon: this.hasWon,
       hasLost: this.hasLost,
       scrollOffsetPx: this.scrollOffsetPx,

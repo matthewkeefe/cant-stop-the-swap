@@ -74,7 +74,8 @@ export function drawStateToCanvas(
   fgSkin?: Skin,
   canvasBgImage?: HTMLImageElement | null
 ) {
-  const { width, height, grid, colors, cursorX, cursorY, phase, fallPieces, showClearLine, clearLineY } = state;
+  const { width, height, grid, colors, cursorX, cursorY, phase, fallPieces, clearLineY } = state;
+  const showClearLine = (state.linesClearedEq ?? 0) >= (state.targetLines ?? 0);
 
   blinkT = (blinkT + dtMs) % FADE_MS;
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -160,25 +161,9 @@ export function drawStateToCanvas(
     ctx.restore();
   }
 
-  // Win line: solid 6px white bar centered at state.winLineY
-  if (typeof state.winLineY === "number") {
-    const centerY = Math.round(state.winLineY) + 0.5;
-    const BAR_HEIGHT = 6;
-    const top = Math.round(centerY - BAR_HEIGHT / 2);
-    const totalW = width * cellSize;
-    ctx.save();
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0.5, top + 0.5, totalW, BAR_HEIGHT);
-    ctx.strokeStyle = "rgba(0,0,0,0.25)";
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(0.5, top + 0.5);
-    ctx.lineTo(totalW - 0.5, top + 0.5);
-    ctx.moveTo(0.5, top + 0.5 + BAR_HEIGHT - 0.5);
-    ctx.lineTo(totalW - 0.5, top + 0.5 + BAR_HEIGHT - 0.5);
-    ctx.stroke();
-    ctx.restore();
-  }
+  // Win line is rendered in DOM (WinLine component). Canvas renderer no
+  // longer draws the solid white win threshold so the UI can supply a
+  // styled, accessible bar that animates independently of the canvas.
 
   const cx = cursorX * cellSize;
   const cy = cursorY * cellSize - scrollOffsetPx;

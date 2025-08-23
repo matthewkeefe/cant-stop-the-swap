@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import WinLine from "./ui/WinLine";
 import { useNavigate } from "react-router-dom";
 import { Engine } from "./game-core/engine";
 
@@ -55,7 +56,11 @@ export default function App() {
   // Detect mobile viewport and adjust UI: on mobile we show a minimal UI.
   const [isMobile, setIsMobile] = useState<boolean>(() => {
     try {
-      return typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width:640px)").matches;
+      return (
+        typeof window !== "undefined" &&
+        window.matchMedia &&
+        window.matchMedia("(max-width:640px)").matches
+      );
     } catch {
       return false;
     }
@@ -112,6 +117,35 @@ export default function App() {
     risePauseMs: 0,
     risePauseMaxMs: 0,
   });
+  const [winLine, setWinLine] = useState({ percent: 0, yPx: -9999 });
+  const [titleHover, setTitleHover] = useState(false);
+  const [optionsHover, setOptionsHover] = useState(false);
+  // Volume settings (persisted to localStorage)
+  const [musicVolume, setMusicVolume] = useState<number>(() => {
+    const v = typeof window !== "undefined" ? localStorage.getItem("musicVolume") : null;
+    return v !== null ? Math.max(0, Math.min(1, Number(v))) : 0.25;
+  });
+  const [sfxVolume, setSfxVolume] = useState<number>(() => {
+    const v = typeof window !== "undefined" ? localStorage.getItem("sfxVolume") : null;
+    return v !== null ? Math.max(0, Math.min(1, Number(v))) : 1.0;
+  });
+
+  // Update local volume state if other windows/tabs (or OptionsPage) change localStorage
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (!e.key) return;
+      if (e.key === "musicVolume") {
+        const v = e.newValue;
+        if (v != null) setMusicVolume(Math.max(0, Math.min(1, Number(v))));
+      } else if (e.key === "sfxVolume") {
+        const v = e.newValue;
+        if (v != null) setSfxVolume(Math.max(0, Math.min(1, Number(v))));
+      }
+    }
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   // When a level is selected, copy its settings into the inputs so Start uses them.
   useEffect(() => {
@@ -306,7 +340,8 @@ export default function App() {
       if (!touchStateRef.current.active) return;
       const dx = ev.clientX - touchStateRef.current.startX;
       const dy = ev.clientY - touchStateRef.current.startY;
-      if (Math.hypot(dx, dy) > MOVE_THRESHOLD_PX) touchStateRef.current.moved = true;
+      if (Math.hypot(dx, dy) > MOVE_THRESHOLD_PX)
+        touchStateRef.current.moved = true;
       if (!engineRef.current) return;
       const rect = canvasEl!.getBoundingClientRect();
       const px = ev.clientX - rect.left;
@@ -333,7 +368,9 @@ export default function App() {
       if (!moved && duration <= TAP_MAX_MS) {
         try {
           engineRef.current?.swap();
-        } catch { console.log("Swap failed"); }
+        } catch {
+          console.log("Swap failed");
+        }
       }
       ev.preventDefault();
     };
@@ -509,9 +546,23 @@ export default function App() {
 
         lastCursorRef.current = { x: s.cursorX, y: s.cursorY };
 
-        // HUD: tiles above dashed line
+        // Compute win line percent and Y for the DOM WinLine component.
+        const engine = engineRef.current;
+        const total = Math.max(1, engine.totalLevelLines || 1);
+        const rows = Math.max(0, engine.rowsInserted || 0);
+        const pct = Math.max(0, Math.min(100, (rows / total) * 100));
+  const rawWinY = typeof s.winLineY === "number" ? s.winLineY - 2.5 : -9999;
+  // Only clamp the lower bound so the win line can remain off-screen
+  // below the canvas when rows haven't risen far enough. Previously
+  // clamping the upper bound forced off-screen values to the bottom
+  // of the canvas which made the line appear incorrectly. Allow
+  // rawWinY > canvas height so parent `overflow: hidden` keeps it hidden.
+  const clampedWinY = Math.max(-CELL, rawWinY);
+  setWinLine({ percent: pct, yPx: clampedWinY });
+
+        // HUD: tiles above dashed line (derived)
         let tilesAbove = 0;
-        if (s.showClearLine) {
+        if ((s.linesClearedEq ?? 0) >= (s.targetLines ?? 0)) {
           for (let y = 0; y < s.clearLineY; y++) {
             for (let x = 0; x < s.width; x++) {
               if (s.grid[y][x] >= 0) tilesAbove++;
@@ -576,7 +627,7 @@ export default function App() {
     const m = mRef.current;
     if (!m) return;
     try {
-      const startVol = typeof m.volume === "number" ? m.volume : 1;
+  const startVol = typeof m.volume === "number" ? m.volume : musicVolume;
       const start = performance.now();
       const step = 30; // ms tick
       const tick = () => {
@@ -649,12 +700,12 @@ export default function App() {
       }
       // Resume music for current level
       const lvl = LEVELS.find((l) => l.id === selectedLevelId);
-      if (lvl && lvl.music) {
+    if (lvl && lvl.music) {
         try {
           const m = new Audio(lvl.music);
           m.loop = true;
           m.preload = "auto";
-          m.volume = 0.25;
+      m.volume = musicVolume;
           m.play().catch(() => {});
           musicRef.current = m;
         } catch {
@@ -719,11 +770,12 @@ export default function App() {
         } else {
           idx = 4;
         }
-        if (pausedRef.current) return;
-        const audio = sounds[idx] as HTMLAudioElement;
-        const clone = audio.cloneNode(true) as HTMLAudioElement;
-        clone.play().catch(() => {});
-        playingClonesRef.current.push(clone);
+  if (pausedRef.current) return;
+  const audio = sounds[idx] as HTMLAudioElement;
+  const clone = audio.cloneNode(true) as HTMLAudioElement;
+  try { clone.volume = sfxVolume; } catch { /* ignore volume set errors */ }
+  clone.play().catch(() => {});
+  playingClonesRef.current.push(clone);
       } catch {
         // swallow errors so game keeps running
       }
@@ -735,6 +787,7 @@ export default function App() {
         if (pausedRef.current) return;
         if (swapRef.current) {
           const clone = swapRef.current.cloneNode(true) as HTMLAudioElement;
+          try { clone.volume = sfxVolume; } catch { /* ignore volume set errors */ }
           clone.play().catch(() => {});
           playingClonesRef.current.push(clone);
         }
@@ -887,72 +940,6 @@ export default function App() {
             }}
           >
             <div>
-              {/* Chain Gauge: persistent bar above the grid (full width). */}
-              <div
-                style={{
-                  width: WIDTH * CELL,
-                  marginBottom: 8,
-                }}
-              >
-                <div style={{ position: "relative", height: 28 }}>
-                  {/* background track */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      background: "rgba(255,255,255,0.06)",
-                      borderRadius: 8,
-                      overflow: "hidden",
-                    }}
-                  />
-
-                  {/* progress fill */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: `${Math.max(
-                        0,
-                        Math.min(
-                          100,
-                          hud.risePauseMaxMs
-                            ? (hud.risePauseMs / hud.risePauseMaxMs) * 100
-                            : 0
-                        )
-                      )}%`,
-                      background: "linear-gradient(90deg,#6ee7b7,#34d399)",
-                      transition: "width 120ms linear",
-                    }}
-                  />
-
-                  {/* overlay content inside the bar */}
-                  <div
-                    style={{
-                      position: "relative",
-                      height: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "0 10px",
-                      fontSize: 14,
-                      color: "#ffffff",
-                      fontWeight: 700,
-                      textShadow: "0 1px 2px rgba(0,0,0,0.4)",
-                    }}
-                  >
-                    <div>Chain Gauge</div>
-                    <div style={{ opacity: 0.95 }}>
-                      {Math.ceil((hud.risePauseMs || 0) / 1000)}s
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* Game grid and overlays */}
               <div
                 style={{
@@ -977,8 +964,64 @@ export default function App() {
                   ref={canvasRef}
                   width={WIDTH * CELL}
                   height={HEIGHT * CELL}
-                  style={{ borderRadius: 8 }}
+                  style={{ borderRadius: 8, position: "relative", zIndex: 1000 }}
                 />
+                {/* Inline Chain Gauge: 8px tall, sits inside the board container at the top */}
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    height: 11,
+                    overflow: "hidden",
+                    pointerEvents: "none",
+                    opacity: 0.8,
+                    zIndex: 1100,
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: `${Math.max(
+                        0,
+                        Math.min(
+                          100,
+                          hud.risePauseMaxMs
+                            ? (hud.risePauseMs / hud.risePauseMaxMs) * 100
+                            : 0
+                        )
+                      )}%`,
+                      background: "linear-gradient(90deg,#6ee7b7,#34d399)",
+                      transition: "width 120ms linear",
+                    }}
+                  ></div>
+                    {/* STOP label: shows only when the gauge is active (risePauseMaxMs > 0) */}
+                    {hud.risePauseMs > 0 && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: 4,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          fontSize: 9,
+                          fontWeight: 800,
+                          lineHeight: 1,
+                          color: "#333",
+                          textShadow: "0 2px 2px rgba(223, 210, 210, 1)",
+                          pointerEvents: "none",
+                          zIndex: 1110,
+                          userSelect: "none",
+                        }}
+                      >
+                        STOP!
+                      </div>
+                    )}
+                </div>
                 {/* Soft fade gradients at top and bottom to mask incoming rows */}
                 <div
                   style={{
@@ -1008,108 +1051,194 @@ export default function App() {
                     borderBottomRightRadius: 8,
                   }}
                 />
-                {scene === "play" && !isMobile && (hud.hasWon || hud.hasLost) && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      display: "grid",
-                      placeItems: "center",
-                      color: "#fff",
-                      textShadow: "0 2px 8px rgba(0,0,0,0.6)",
-                      fontWeight: 700,
-                      fontSize: 32,
-                      letterSpacing: 1,
-                    }}
-                  >
+                {/* Win line (DOM) */}
+                <WinLine
+                  percent={winLine.percent}
+                  yPx={winLine.yPx}
+                  aria-label="Win threshold"
+                  style={{ filter: hud.hasWon || hud.hasLost ? "blur(3px)" : "none" }}
+                />
+                {/* Title button at top-right of the board */}
+                <button
+                  onMouseEnter={() => setTitleHover(true)}
+                  onMouseLeave={() => setTitleHover(false)}
+                  onClick={() => {
+                    // Stop music and playing clones, reset engine and HUD, go to title
+                    if (musicRef.current) fadeOutAndStopMusic(musicRef, 200);
+                    for (const a of playingClonesRef.current) {
+                      try {
+                        a.pause();
+                        a.currentTime = 0;
+                      } catch {
+                        /* ignore clone stop errors */
+                      }
+                    }
+                    playingClonesRef.current = [];
+                    engineRef.current = null;
+                    setPaused(false);
+                    pausedRef.current = false;
+                    setHud({
+                      score: 0,
+                      matches: 0,
+                      chains: 0,
+                      linesEq: 0,
+                      tilesAbove: 0,
+                      hasWon: false,
+                      hasLost: false,
+                      risePauseMs: 0,
+                      risePauseMaxMs: 0,
+                    });
+                    navigate("/");
+                  }}
+                  style={{
+                    position: "absolute",
+                    right: 8,
+                    top: 8,
+                    zIndex: 1300,
+                    padding: "6px 10px",
+                    fontSize: 14,
+                    borderRadius: 6,
+                    border: "none",
+                    background: "rgba(0,0,0,0.5)",
+                    color: "#fff",
+                    cursor: "pointer",
+                    opacity: titleHover ? 1 : 0.25,
+                    transition: "opacity 160ms ease-in-out",
+                  }}
+                >
+                  Title
+                </button>
+                {/* Options button, same style as Title, sits to the left of it */}
+                <button
+                  onMouseEnter={() => setOptionsHover(true)}
+                  onMouseLeave={() => setOptionsHover(false)}
+                  onClick={() => {
+                    navigate("/options");
+                  }}
+                  aria-label="Options"
+                  style={{
+                    position: "absolute",
+                    right: 72,
+                    top: 8,
+                    zIndex: 1300,
+                    padding: "6px 10px",
+                    fontSize: 14,
+                    borderRadius: 6,
+                    border: "none",
+                    background: "rgba(0,0,0,0.5)",
+                    color: "#fff",
+                    cursor: "pointer",
+                    opacity: optionsHover ? 1 : 0.25,
+                    transition: "opacity 160ms ease-in-out",
+                  }}
+                >
+                  Options
+                </button>
+                {scene === "play" &&
+                  !isMobile &&
+                  (hud.hasWon || hud.hasLost) && (
                     <div
                       style={{
-                        padding: "12px 16px",
-                        borderRadius: 8,
-                        background: "rgba(0,0,0,0.5)",
-                        border: "1px solid rgba(255,255,255,0.2)",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
+                        position: "absolute",
+                        inset: 0,
+                        display: "grid",
+                        placeItems: "center",
+                        color: "#fff",
+                        textShadow: "0 2px 8px rgba(0,0,0,0.6)",
+                        fontWeight: 700,
+                        fontSize: 32,
+                        letterSpacing: 1,
+                        zIndex: 1200, // ensure overlay appears above WinLine
                       }}
                     >
-                      {hud.hasWon ? "You win!" : "Game Over!"}
-                      {hud.hasWon && (
-                        <button
-                          style={{
-                            marginTop: 18,
-                            fontSize: 20,
-                            padding: "8px 24px",
-                            borderRadius: 6,
-                            border: "none",
-                            background: "#34d399",
-                            color: "#222",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-                          }}
-                          onClick={() => {
-                            const idx = LEVELS.findIndex(
-                              (l) => l.id === selectedLevelId
-                            );
-                            const nextIdx = (idx + 1) % LEVELS.length;
-                            const nextId = LEVELS[nextIdx].id;
-                            advanceToLevel(nextId);
-                          }}
-                        >
-                          Next Level
-                        </button>
-                      )}
-                      {hud.hasLost && (
-                        <button
-                          style={{
-                            marginTop: 18,
-                            fontSize: 20,
-                            padding: "8px 24px",
-                            borderRadius: 6,
-                            border: "none",
-                            background: "#f87171",
-                            color: "#222",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-                          }}
-                          onClick={() => {
-                            // stop music and playing clones, reset engine and HUD, go to title
-                            if (musicRef.current)
-                              fadeOutAndStopMusic(musicRef, 200);
-                            for (const a of playingClonesRef.current) {
-                              try {
-                                a.pause();
-                                a.currentTime = 0;
-                              } catch {
-                                /* ignore clone stop errors */
+                      <div
+                        style={{
+                          padding: "12px 16px",
+                          borderRadius: 8,
+                          background: "rgba(0,0,0,0.5)",
+                          border: "1px solid rgba(255,255,255,0.2)",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                        }}
+                      >
+                        {hud.hasWon ? "You win!" : "Game Over!"}
+                        {hud.hasWon && (
+                          <button
+                            style={{
+                              marginTop: 18,
+                              fontSize: 20,
+                              padding: "8px 24px",
+                              borderRadius: 6,
+                              border: "none",
+                              background: "#34d399",
+                              color: "#222",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                            }}
+                            onClick={() => {
+                              const idx = LEVELS.findIndex(
+                                (l) => l.id === selectedLevelId
+                              );
+                              const nextIdx = (idx + 1) % LEVELS.length;
+                              const nextId = LEVELS[nextIdx].id;
+                              advanceToLevel(nextId);
+                            }}
+                          >
+                            Next Level
+                          </button>
+                        )}
+                        {hud.hasLost && (
+                          <button
+                            style={{
+                              marginTop: 18,
+                              fontSize: 20,
+                              padding: "8px 24px",
+                              borderRadius: 6,
+                              border: "none",
+                              background: "#f87171",
+                              color: "#222",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                            }}
+                            onClick={() => {
+                              // stop music and playing clones, reset engine and HUD, go to title
+                              if (musicRef.current)
+                                fadeOutAndStopMusic(musicRef, 200);
+                              for (const a of playingClonesRef.current) {
+                                try {
+                                  a.pause();
+                                  a.currentTime = 0;
+                                } catch {
+                                  /* ignore clone stop errors */
+                                }
                               }
-                            }
-                            playingClonesRef.current = [];
-                            engineRef.current = null;
-                            setPaused(false);
-                            pausedRef.current = false;
-                            setHud({
-                              score: 0,
-                              matches: 0,
-                              chains: 0,
-                              linesEq: 0,
-                              tilesAbove: 0,
-                              hasWon: false,
-                              hasLost: false,
-                              risePauseMs: 0,
-                              risePauseMaxMs: 0,
-                            });
-                            navigate("/");
-                          }}
-                        >
-                          Return to Title
-                        </button>
-                      )}
+                              playingClonesRef.current = [];
+                              engineRef.current = null;
+                              setPaused(false);
+                              pausedRef.current = false;
+                              setHud({
+                                score: 0,
+                                matches: 0,
+                                chains: 0,
+                                linesEq: 0,
+                                tilesAbove: 0,
+                                hasWon: false,
+                                hasLost: false,
+                                risePauseMs: 0,
+                                risePauseMaxMs: 0,
+                              });
+                              navigate("/");
+                            }}
+                          >
+                            Return to Title
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
                 {/* Mobile swap button: simple floating control for tap-to-swap */}
                 {isMobile && scene === "play" && (
                   <button
@@ -1143,121 +1272,62 @@ export default function App() {
             {/* Right HUD: hide on mobile for a minimal experience */}
             {!isMobile && (
               <div style={{ fontSize: 14 }}>
-              {/* Title and small intro moved to the right HUD */}
+                {/* Title and small intro moved to the right HUD */}
                 <div style={{ marginBottom: 10 }}>
                   <h2 style={{ margin: 0 }}>Can't Stop the Swap</h2>
                   {scene === "title" ? (
                     <p style={{ marginTop: 4, opacity: 0.9 }}>
-                      Press <strong>Enter</strong> or click <strong>Start</strong>
-                      .
+                      Press <strong>Enter</strong> or click{" "}
+                      <strong>Start</strong>.
                     </p>
                   ) : null}
                 </div>
 
-              {/* Score HUD moved above settings */}
-              {scene === "play" && (
-                <div style={{ fontSize: 14, opacity: 0.9, marginBottom: 16 }}>
-                  <div style={{ fontSize: 24, marginBottom: 6 }}>
-                    {/* rise pause indicator already shown above the grid; keep this space for consistency */}
+                {/* Score HUD moved above settings */}
+                {scene === "play" && (
+                  <div style={{ fontSize: 14, opacity: 0.9, marginBottom: 16 }}>
+                    <div style={{ fontSize: 24, marginBottom: 6 }}>
+                      {/* rise pause indicator already shown above the grid; keep this space for consistency */}
+                    </div>
+                    <div>
+                      Score: <strong>{hud.score}</strong>
+                    </div>
+                    <div>
+                      Matches (incl. chains): <strong>{hud.matches}</strong>
+                    </div>
+                    <div>
+                      Current chain: <strong>x{Math.max(1, hud.chains)}</strong>
+                    </div>
+                    <div>
+                      Lines cleared (eq): <strong>{hud.linesEq}</strong> /{" "}
+                      <strong>{inputs.targetLines}</strong>
+                    </div>
+                    <div>
+                      Tiles above line: <strong>{hud.tilesAbove}</strong>
+                    </div>
                   </div>
-                  <div>
-                    Score: <strong>{hud.score}</strong>
-                  </div>
-                  <div>
-                    Matches (incl. chains): <strong>{hud.matches}</strong>
-                  </div>
-                  <div>
-                    Current chain: <strong>x{Math.max(1, hud.chains)}</strong>
-                  </div>
-                  <div>
-                    Lines cleared (eq): <strong>{hud.linesEq}</strong> /{" "}
-                    <strong>{inputs.targetLines}</strong>
-                  </div>
-                  <div>
-                    Tiles above line: <strong>{hud.tilesAbove}</strong>
+                )}
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ display: "block", marginBottom: 6 }}>
+                    Level: <strong style={{ marginLeft: 8 }}>{LEVELS.find(l => l.id === selectedLevelId)?.name}</strong>
                   </div>
                 </div>
-              )}
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ display: "block", marginBottom: 6 }}>
-                  Level:
-                  <select
-                    value={selectedLevelId}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setSelectedLevelId(v);
-                      // Trigger a full game reset as if Reset was pressed
-                      startGame(v);
-                    }}
-                    style={{ width: 200, marginLeft: 8 }}
-                  >
-                    {LEVELS.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
 
-                {/* Only show level selector UI here. Other input controls removed per request. */}
+                {scene === "play" ? (
+                  <div>
+                    <p style={{ marginTop: 8, opacity: 0.8 }}>
+                      Controls: Arrows = move • Z/Space = swap • X = raise
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <button onClick={() => startGame()}>Start</button>
+                    <p style={{ marginTop: 8, opacity: 0.8 }}>
+                      Press <strong>Enter</strong> to start.
+                    </p>
+                  </div>
+                )}
               </div>
-
-              {scene === "play" ? (
-                <div>
-                  <button onClick={() => startGame()}>Reset</button>
-                  <button
-                    onClick={() => togglePause()}
-                    style={{ marginLeft: 8 }}
-                  >
-                    {paused ? "Continue" : "Pause"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Stop music and playing clones, reset engine and HUD, go to title
-                      if (musicRef.current) fadeOutAndStopMusic(musicRef, 200);
-                      for (const a of playingClonesRef.current) {
-                        try {
-                          a.pause();
-                          a.currentTime = 0;
-                        } catch {
-                          /* ignore clone stop errors */
-                        }
-                      }
-                      playingClonesRef.current = [];
-                      engineRef.current = null;
-                      setPaused(false);
-                      pausedRef.current = false;
-                      setHud({
-                        score: 0,
-                        matches: 0,
-                        chains: 0,
-                        linesEq: 0,
-                        tilesAbove: 0,
-                        hasWon: false,
-                        hasLost: false,
-                        risePauseMs: 0,
-                        risePauseMaxMs: 0,
-                      });
-                      navigate("/");
-                    }}
-                    style={{ marginLeft: 8 }}
-                  >
-                    Return to Title
-                  </button>
-                  <p style={{ marginTop: 8, opacity: 0.8 }}>
-                    Controls: Arrows = move • Z/Space = swap • X = raise • R =
-                    reset • P = pause/continue
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <button onClick={() => startGame()}>Start</button>
-                  <p style={{ marginTop: 8, opacity: 0.8 }}>
-                    Press <strong>Enter</strong> to start.
-                  </p>
-                </div>
-              )}
-            </div>
             )}
 
             {/* Mobile title overlay: minimal UI with Start button */}
