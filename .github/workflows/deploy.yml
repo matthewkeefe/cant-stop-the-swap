@@ -18,7 +18,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          # Use Node 22 to satisfy devDependency engine requirements for Vite and plugin-react
+          node-version: '22'
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
