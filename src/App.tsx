@@ -423,9 +423,14 @@ export default function App() {
           e.preventDefault();
           const currentId = selectedLevelIdRef.current;
           const idx = LEVELS.findIndex((l) => l.id === currentId);
-          const nextIdx = (idx + 1) % LEVELS.length;
-          const nextId = LEVELS[nextIdx].id;
-          advanceToLevel(nextId);
+          const nextIdx = idx + 1;
+          // If this was the final level, go to the You Beat the Game page.
+          if (nextIdx >= LEVELS.length) {
+            navigate("/you-beat");
+          } else {
+            const nextId = LEVELS[nextIdx].id;
+            advanceToLevel(nextId);
+          }
           return;
         }
         // don't allow other gameplay keys while won
@@ -1408,12 +1413,16 @@ export default function App() {
                               boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
                             }}
                             onClick={() => {
-                              const idx = LEVELS.findIndex(
-                                (l) => l.id === selectedLevelId
-                              );
-                              const nextIdx = (idx + 1) % LEVELS.length;
-                              const nextId = LEVELS[nextIdx].id;
-                              advanceToLevel(nextId);
+                                const idx = LEVELS.findIndex(
+                                  (l) => l.id === selectedLevelId
+                                );
+                                const nextIdx = idx + 1;
+                                if (nextIdx >= LEVELS.length) {
+                                  navigate("/you-beat");
+                                } else {
+                                  const nextId = LEVELS[nextIdx].id;
+                                  advanceToLevel(nextId);
+                                }
                             }}
                           >
                             Next Level
