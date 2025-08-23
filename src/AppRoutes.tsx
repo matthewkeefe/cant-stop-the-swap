@@ -2,6 +2,7 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import TitlePage from "./pages/TitlePage";
 import OptionsPage from "./pages/OptionsPage";
+import LevelSelectPage from "./pages/LevelSelectPage";
 import App from "./App";
 
 const AppRoutes: React.FC = () => {
@@ -9,6 +10,7 @@ const AppRoutes: React.FC = () => {
     <Routes>
       <Route path="/" element={<TitlePage />} />
       <Route path="/play" element={<App />} />
+  <Route path="/levels" element={<LevelSelectPage />} />
       <Route path="/options" element={<OptionsPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

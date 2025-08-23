@@ -77,6 +77,15 @@ export default function App() {
   const [selectedLevelId, setSelectedLevelId] = useState<string>(
     LEVELS[0]?.id ?? "level-1"
   );
+  // If the user selected a level via the LevelSelectPage, prefer that
+  useEffect(() => {
+    try {
+      const stored = typeof window !== "undefined" ? localStorage.getItem("selectedLevelId") : null;
+      if (stored) setSelectedLevelId(stored);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
   // Keep a ref of selectedLevelId so long-lived event handlers can read the
   // latest value without re-registering listeners.
   const selectedLevelIdRef = useRef<string>(selectedLevelId);
@@ -120,6 +129,7 @@ export default function App() {
   const [winLine, setWinLine] = useState({ percent: 0, yPx: -9999 });
   const [titleHover, setTitleHover] = useState(false);
   const [optionsHover, setOptionsHover] = useState(false);
+  const [levelsHover, setLevelsHover] = useState(false);
   // Volume settings (persisted to localStorage)
   const [musicVolume, setMusicVolume] = useState<number>(() => {
     const v = typeof window !== "undefined" ? localStorage.getItem("musicVolume") : null;
@@ -1133,6 +1143,32 @@ export default function App() {
                   }}
                 >
                   Options
+                </button>
+                {/* Levels button between Options and Title */}
+                <button
+                  onMouseEnter={() => setLevelsHover(true)}
+                  onMouseLeave={() => setLevelsHover(false)}
+                  onClick={() => {
+                    navigate("/levels");
+                  }}
+                  aria-label="Levels"
+                  style={{
+                    position: "absolute",
+                    right: 40,
+                    top: 8,
+                    zIndex: 1300,
+                    padding: "6px 10px",
+                    fontSize: 14,
+                    borderRadius: 6,
+                    border: "none",
+                    background: "rgba(0,0,0,0.5)",
+                    color: "#fff",
+                    cursor: "pointer",
+                    opacity: levelsHover ? 1 : 0.25,
+                    transition: "opacity 160ms ease-in-out",
+                  }}
+                >
+                  Levels
                 </button>
                 {scene === "play" &&
                   !isMobile &&

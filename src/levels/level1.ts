@@ -5,9 +5,9 @@ import musicUrl from "../assets/music/level_1.mp3?url";
 const level1: Level = {
   id: "level-1",
   name: "Level 1",
-  // background should be a plain URL string; App wraps it with `url(...)` when
-  // applying the CSS background-image, so pass the raw asset URL here.
+  shortName: "1",
   background: bgUrl,
+  color: "#00FFFF",
   totalLines: 5,
   startingLines: 5,
   targetLines: 5,

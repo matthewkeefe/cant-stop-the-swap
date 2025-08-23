@@ -3,12 +3,12 @@ import type { Level } from "./types";
 import bgUrl from "../assets/background/desert.png?url";
 import musicUrl from "../assets/music/level_1.mp3?url";
 
-const level3: Level = {
-  id: "level-3",
-  name: "Level 3",
-  shortName: "3",
+const level9: Level = {
+  id: "level-9",
+  name: "Level 9",
+  shortName: "9",
   background: bgUrl,
-  color: "#FF4500",
+  color: "#FF69B4",
   totalLines: 10,
   startingLines: 5,
   targetLines: 10,
@@ -16,4 +16,4 @@ const level3: Level = {
   music: musicUrl,
 };
 
-export default level3;
+export default level9;
