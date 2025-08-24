@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import congratulationsBackground from "../assets/background/congratulations.png";
+import Footer from "../components/Footer";
 
 const CongratulationsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -47,6 +48,7 @@ const CongratulationsPage: React.FC = () => {
           <button onClick={() => navigate("/levels")}>Level Select</button>
           <button onClick={() => navigate("/play")}>Play Last Level Again</button>
         </div>
+  <Footer />
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Footer from "../components/Footer";
 
 const OptionsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -87,6 +88,7 @@ const OptionsPage: React.FC = () => {
         <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
           <button onClick={() => navigate(-1)}>Back</button>
         </div>
+  <Footer />
       </div>
     </div>
   );

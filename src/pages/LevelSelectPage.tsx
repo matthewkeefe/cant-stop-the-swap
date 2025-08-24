@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import LEVELS from "../levels";
 import whiteSplat from "../assets/sprites/white-splat.png?url";
+import Footer from "../components/Footer";
 
 const circleSize = 96;
 
@@ -156,6 +157,7 @@ const LevelSelectPage: React.FC = () => {
         <div style={{ marginTop: 16 }}>
           <button onClick={() => navigate(-1)}>Back</button>
         </div>
+  <Footer />
       </div>
     </div>
   );

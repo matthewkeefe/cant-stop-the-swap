@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import titleBackground from "../assets/background/csts-title.png";
+import Footer from "../components/Footer";
 
 const TitlePage: React.FC = () => {
   const nav = useNavigate();
@@ -82,6 +83,7 @@ const TitlePage: React.FC = () => {
           <button onClick={() => nav("/scores")}>Scores</button>
         </div>
       </div>
+    <Footer />
     </div>
   );
 };

@@ -14,6 +14,7 @@ import tilesGemsPng from "./assets/sprites/gems.png";
 import tilesGemsXmlUrl from "./assets/sprites/gems.xml?url";
 import { type Atlas, loadGemsAtlas } from "./atlas"; // atlas helpers moved to src/atlas.ts
 import LEVELS from "./levels";
+import Footer from "./components/Footer";
 import snd0 from "./assets/sounds/impactMining_000.ogg?url";
 import snd1 from "./assets/sounds/impactMining_001.ogg?url";
 import snd2 from "./assets/sounds/impactMining_002.ogg?url";
@@ -1717,6 +1718,10 @@ export default function App() {
                     Swap
                   </button>
                 )}
+              </div>
+              {/* Footer under the canvas for play page */}
+              <div style={{ marginTop: 12 }}>
+                <Footer />
               </div>
             </div>
 

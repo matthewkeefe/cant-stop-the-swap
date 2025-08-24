@@ -2,7 +2,11 @@
 
 Visit: https://matthewkeefe.github.io/cant-stop-the-swap/
 
-A small browser-based match-and-rise puzzle game built with React + TypeScript + Vite.
+© 2025 Matt Keefe. All rights reserved. Portions of this game were created with assistance from AI (ChatGPT/OpenAI and Suno).
+
+I started this project as a way to learn TypeScript, building on my foundation in HTML, JavaScript, and CSS. The game was created with help from AI tools: ChatGPT (OpenAI) for brainstorming and graphics, and Suno for music. I explored and refined ideas with ChatGPT before diving into development. GitHub Copilot supported me along the way, providing autocomplete, guidance, and code assistance as I learned. -Matt Keefe
+
+A small browser-based match-and-rise puzzle game built with React + TypeScript + Vite. 
 
 Overview
 - You control a 2-tile cursor and swap adjacent gems to form matches.
