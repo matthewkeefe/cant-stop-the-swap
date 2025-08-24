@@ -1,4 +1,4 @@
-import type { GameState } from "../game-core/engine";
+import type { GameState } from '../game-core/engine';
 
 /** Minimal clean canvas renderer. Draws grid, falling pieces, particles,
  * dashed clear line, and a solid 6px white win line centered at winLineY.
@@ -7,7 +7,7 @@ export type SrcRect = { sx: number; sy: number; sw: number; sh: number };
 export type Skin = {
   image: HTMLImageElement | null;
   pickSrcForCell: (x: number, y: number) => SrcRect;
-  pickSrcForColor?: (colorIndex: number, variant?: "normal" | "clear") => SrcRect;
+  pickSrcForColor?: (colorIndex: number, variant?: 'normal' | 'clear') => SrcRect;
 };
 
 let blinkT = 0;
@@ -15,7 +15,12 @@ const FADE_MS = 300;
 
 function insetSrc(src: SrcRect, bleed = 0): SrcRect {
   if (!bleed) return src;
-  return { sx: src.sx + bleed, sy: src.sy + bleed, sw: Math.max(0, src.sw - bleed * 2), sh: Math.max(0, src.sh - bleed * 2) };
+  return {
+    sx: src.sx + bleed,
+    sy: src.sy + bleed,
+    sw: Math.max(0, src.sw - bleed * 2),
+    sh: Math.max(0, src.sh - bleed * 2),
+  };
 }
 
 function drawGemCell(params: {
@@ -32,7 +37,20 @@ function drawGemCell(params: {
   insetPx?: number;
   isMatched?: boolean;
 }) {
-  const { ctx, v, px, py, cellSize, fgSkin, colors, isClearing, blinkT, spriteBleed = 1, insetPx, isMatched } = params;
+  const {
+    ctx,
+    v,
+    px,
+    py,
+    cellSize,
+    fgSkin,
+    colors,
+    isClearing,
+    blinkT,
+    spriteBleed = 1,
+    insetPx,
+    isMatched,
+  } = params;
   ctx.imageSmoothingEnabled = false;
   const inset = insetPx ?? 2;
   const dx = px + inset;
@@ -40,14 +58,14 @@ function drawGemCell(params: {
   const dw = cellSize - inset * 2;
 
   if (fgSkin?.image && fgSkin.image.complete && fgSkin.pickSrcForColor) {
-    const variant = isMatched && isClearing ? "clear" : "normal";
+    const variant = isMatched && isClearing ? 'clear' : 'normal';
     const raw = fgSkin.pickSrcForColor(v, variant);
     const { sx, sy, sw, sh } = insetSrc(raw, spriteBleed);
     ctx.save();
     ctx.drawImage(fgSkin.image, sx, sy, sw, sh, dx, dy, dw, dw);
     ctx.restore();
   } else {
-    ctx.fillStyle = colors[v] ?? "#888";
+    ctx.fillStyle = colors[v] ?? '#888';
     ctx.fillRect(dx, dy, dw, dw);
   }
 
@@ -57,7 +75,7 @@ function drawGemCell(params: {
     if (alpha > 0) {
       ctx.save();
       ctx.globalAlpha = alpha * 0.5;
-      ctx.fillStyle = "white";
+      ctx.fillStyle = 'white';
       ctx.fillRect(dx, dy, dw, dw);
       ctx.restore();
     }
@@ -72,7 +90,7 @@ export function drawStateToCanvas(
   scrollOffsetPx = 0,
   bgSkin?: Skin,
   fgSkin?: Skin,
-  canvasBgImage?: HTMLImageElement | null
+  canvasBgImage?: HTMLImageElement | null,
 ) {
   const { width, height, grid, colors, phase, fallPieces, clearLineY } = state;
   const showClearLine = (state.linesClearedEq ?? 0) >= (state.targetLines ?? 0);
@@ -99,7 +117,19 @@ export function drawStateToCanvas(
       }
       if (v < 0) continue;
       const isMatched = !!(state.matchMask && state.matchMask[y] && state.matchMask[y][x]);
-      drawGemCell({ ctx, v, px, py, cellSize, fgSkin, colors, isClearing: phase === "clearing", blinkT, spriteBleed: 1, isMatched });
+      drawGemCell({
+        ctx,
+        v,
+        px,
+        py,
+        cellSize,
+        fgSkin,
+        colors,
+        isClearing: phase === 'clearing',
+        blinkT,
+        spriteBleed: 1,
+        isMatched,
+      });
     }
   }
 
@@ -110,7 +140,7 @@ export function drawStateToCanvas(
       const { sx, sy, sw, sh } = fgSkin.pickSrcForColor(p.color);
       ctx.drawImage(fgSkin.image, sx, sy, sw, sh, px + 2, py + 2, cellSize - 4, cellSize - 4);
     } else {
-      ctx.fillStyle = state.colors[p.color] ?? "#888";
+      ctx.fillStyle = state.colors[p.color] ?? '#888';
       ctx.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
     }
   }
@@ -118,7 +148,7 @@ export function drawStateToCanvas(
   const particles = state.particles || [];
   if (particles.length > 0) {
     ctx.save();
-    ctx.globalCompositeOperation = "lighter";
+    ctx.globalCompositeOperation = 'lighter';
     for (const pt of particles) {
       const px = pt.x;
       const py = pt.y - scrollOffsetPx;
@@ -144,14 +174,26 @@ export function drawStateToCanvas(
         const s = insetSrc(src, 0);
         ctx.drawImage(bgSkin.image, s.sx, s.sy, s.sw, s.sh, px, py, cellSize, cellSize);
       }
-      drawGemCell({ ctx, v, px, py, cellSize, fgSkin, colors, isClearing: false, blinkT: 0, spriteBleed: 1, isMatched: false });
+      drawGemCell({
+        ctx,
+        v,
+        px,
+        py,
+        cellSize,
+        fgSkin,
+        colors,
+        isClearing: false,
+        blinkT: 0,
+        spriteBleed: 1,
+        isMatched: false,
+      });
     }
   }
 
   if (showClearLine) {
     const yPix = clearLineY * cellSize + 0.5;
     ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.8)";
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
     ctx.setLineDash([8, 8]);
     ctx.lineWidth = 2;
     ctx.beginPath();

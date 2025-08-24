@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { Engine } from "../src/game-core/engine";
-import type { GameState } from "../src/game-core/engine";
+import { describe, it, expect } from 'vitest';
+import { Engine } from '../src/game-core/engine';
+import type { GameState } from '../src/game-core/engine';
 
 // Small helper to create a row that would normally create a horizontal triple
 function tripleRow(width: number, color: number) {
@@ -13,8 +13,8 @@ function tripleRow(width: number, color: number) {
   return r;
 }
 
-describe("Engine queue sanitization", () => {
-  it("preview matches inserted bottom row after rising", () => {
+describe('Engine queue sanitization', () => {
+  it('preview matches inserted bottom row after rising', () => {
     const e = new Engine(6, 6, 4);
     // prepare a queue where the first row would create a horizontal triple
     const raw = tripleRow(6, 0);
@@ -22,15 +22,15 @@ describe("Engine queue sanitization", () => {
     e.setLevelQueue([raw, raw2], 0);
 
     // preview should equal the queued sanitized row copy
-  const state = e.getState() as GameState;
+    const state = e.getState() as GameState;
     expect(state.nextRowPreview).toBeDefined();
     const preview = (state.nextRowPreview as number[]).slice();
 
-  // Simulate a full-row scroll: set scroll offset to one cell and call
-  // update() so insertion from queue occurs using public API.
-  e.scrollOffsetPx = e.cellSize;
-  e.update(16);
-    
+    // Simulate a full-row scroll: set scroll offset to one cell and call
+    // update() so insertion from queue occurs using public API.
+    e.scrollOffsetPx = e.cellSize;
+    e.update(16);
+
     // After insertion, bottom row should equal the preview
     const bottom = e.grid[e.height - 1].slice();
     expect(bottom).toEqual(preview);

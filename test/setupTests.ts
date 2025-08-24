@@ -9,7 +9,9 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
         canvas: this,
         fillRect: () => {},
         clearRect: () => {},
-        getImageData: (x: number, y: number, w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+        getImageData: (x: number, y: number, w: number, h: number) => ({
+          data: new Uint8ClampedArray(w * h * 4),
+        }),
         putImageData: () => {},
         createImageData: () => ({ width: 0, height: 0, data: new Uint8ClampedArray(0) }),
         setTransform: () => {},
@@ -23,17 +25,17 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
         closePath: () => {},
         moveTo: () => {},
         lineTo: () => {},
-  setLineDash: () => {},
-  arc: () => {},
-  strokeRect: () => {},
+        setLineDash: () => {},
+        arc: () => {},
+        strokeRect: () => {},
         stroke: () => {},
         fillText: () => {},
         measureText: () => ({ width: 0 }),
         globalCompositeOperation: 'source-over',
-  // Provide arcTo and styling props used by the renderer
-  arcTo: () => {},
-  lineJoin: 'round',
-  lineCap: 'round',
+        // Provide arcTo and styling props used by the renderer
+        arcTo: () => {},
+        lineJoin: 'round',
+        lineCap: 'round',
       } as unknown;
     }
     return null;
@@ -90,7 +92,11 @@ console.error = (...args: unknown[]) => {
     const text = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
     // Suppress the common React "not wrapped in act(...)" warning in tests
     // which is benign for our environment and triggers many false positives.
-    if (/not wrapped in act\(|wrap-tests-with-act|An update to .* inside a test was not wrapped in act/.test(text)) {
+    if (
+      /not wrapped in act\(|wrap-tests-with-act|An update to .* inside a test was not wrapped in act/.test(
+        text,
+      )
+    ) {
       return;
     }
   } catch {

@@ -1,7 +1,7 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import LEVELS from "../levels";
-import Footer from "../components/Footer";
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import LEVELS from '../levels';
+import Footer from '../components/Footer';
 
 const ScorePage: React.FC = () => {
   const navigate = useNavigate();
@@ -9,8 +9,8 @@ const ScorePage: React.FC = () => {
   // Read playthrough from sessionStorage if present
   let scores: { levelId: string; score: number }[] = [];
   try {
-    if (typeof window !== "undefined") {
-      const raw = sessionStorage.getItem("currentPlaythrough");
+    if (typeof window !== 'undefined') {
+      const raw = sessionStorage.getItem('currentPlaythrough');
       if (raw) scores = JSON.parse(raw) as typeof scores;
     }
   } catch {
@@ -22,19 +22,19 @@ const ScorePage: React.FC = () => {
   return (
     <div
       style={{
-        minHeight: "100vh",
-        width: "100vw",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "flex-start",
-        background: "#0b0b0e",
-        color: "#cbd5e1",
-        fontFamily: "ui-sans-serif, system-ui",
+        minHeight: '100vh',
+        width: '100vw',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        background: '#0b0b0e',
+        color: '#cbd5e1',
+        fontFamily: 'ui-sans-serif, system-ui',
         padding: 16,
-        boxSizing: "border-box",
+        boxSizing: 'border-box',
       }}
     >
-      <div style={{ width: 664, maxWidth: "90vw", textAlign: "left" }}>
+      <div style={{ width: 664, maxWidth: '90vw', textAlign: 'left' }}>
         <h1 style={{ marginBottom: 8 }}>Playthrough Scores</h1>
 
         {scores.length === 0 ? (
@@ -58,10 +58,10 @@ const ScorePage: React.FC = () => {
           </div>
         )}
 
-        <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+        <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
           <button onClick={() => navigate(-1)}>Back</button>
         </div>
-  <Footer />
+        <Footer />
       </div>
     </div>
   );

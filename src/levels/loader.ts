@@ -1,7 +1,7 @@
-import type { Level } from "./types";
-import raw from "./levels.json";
+import type { Level } from './types';
+import raw from './levels.json';
 
-type RawLevel = Omit<Level, "background" | "music"> & {
+type RawLevel = Omit<Level, 'background' | 'music'> & {
   background: string | null;
   music?: string | null;
 };
@@ -14,22 +14,22 @@ const assetMap: Record<string, string> = {};
 // Provide a narrow type for glob to avoid using `any` which the linter flags.
 type ViteGlobFn = (
   pattern: string,
-  opts?: { eager?: boolean; as?: 'url' | 'raw' | 'default' | 'document' | 'webassembly' }
+  opts?: { eager?: boolean; as?: 'url' | 'raw' | 'default' | 'document' | 'webassembly' },
 ) => Record<string, string>;
 const metaWithGlob = import.meta as unknown as { glob?: ViteGlobFn };
-const globFiles = metaWithGlob.glob?.("../assets/**/*", { eager: true, as: "url" }) ?? {};
+const globFiles = metaWithGlob.glob?.('../assets/**/*', { eager: true, as: 'url' }) ?? {};
 for (const key in globFiles) {
   const url = globFiles[key] as string | undefined;
   if (!url) continue;
   // Normalize key to forward slashes so Windows backslashes won't break lookups
-  const keyPosix = key.replace(/\\/g, "/");
+  const keyPosix = key.replace(/\\/g, '/');
   // Ensure key has a leading ../ to match JSON paths like '../assets/...'
-  const normalizedKey = keyPosix.replace(/^\.\/?/, "../");
+  const normalizedKey = keyPosix.replace(/^\.\/?/, '../');
   assetMap[normalizedKey] = url;
   // Also store without the leading '../' so lookups of 'assets/...' succeed
-  assetMap[normalizedKey.replace(/^\.\./, "")] = url;
+  assetMap[normalizedKey.replace(/^\.\./, '')] = url;
   // Also index by basename (e.g. 'desert.png') so JSON paths that include only filename match
-  const parts = normalizedKey.split("/");
+  const parts = normalizedKey.split('/');
   const basename = parts[parts.length - 1];
   if (basename) assetMap[basename] = url;
 }
@@ -39,10 +39,13 @@ function resolveAsset(path: string | null) {
   // Prefer public-style relative paths (e.g. 'assets/background/foo.png') so
   // GH Pages will resolve them relative to the repo root (e.g. '/<repo>/assets/...').
   try {
-    const cleaned = path.replace(/^\.\/?/, ""); // remove './' or '../' prefix
-    if (cleaned.startsWith("assets/")) {
+    const cleaned = path.replace(/^\.\/?/, ''); // remove './' or '../' prefix
+    if (cleaned.startsWith('assets/')) {
       // If the bundler produced a mapped URL for the asset, prefer that.
-      const mapped = assetMap[cleaned] || assetMap[`../${cleaned}`] || assetMap[cleaned.replace(/^assets\//, "")];
+      const mapped =
+        assetMap[cleaned] ||
+        assetMap[`../${cleaned}`] ||
+        assetMap[cleaned.replace(/^assets\//, '')];
       if (mapped) return mapped;
       // Otherwise return the relative public path which will point to the public copy
       // deployed at '/<repo>/assets/...'. Do not add a leading slash so it remains
@@ -57,13 +60,13 @@ function resolveAsset(path: string | null) {
   const variants = new Set<string>();
   const add = (p: string) => variants.add(p);
   add(path);
-  add(path.replace(/^\.\//, ""));
-  add(path.replace(/^\.\.\//, ""));
-  add(path.replace(/^\//, ""));
+  add(path.replace(/^\.\//, ''));
+  add(path.replace(/^\.\.\//, ''));
+  add(path.replace(/^\//, ''));
   add(`../${path}`);
   add(`./${path}`);
   // Also try without any leading ../ so keys like 'assets/...' match
-  add(path.replace(/^\.\.\//, ""));
+  add(path.replace(/^\.\.\//, ''));
 
   for (const v of variants) {
     if (!v) continue;
@@ -73,11 +76,7 @@ function resolveAsset(path: string | null) {
 
   // Fallback: try suffix match in case keys are absolute-ish or hashed
   for (const key in assetMap) {
-    if (
-      key.endsWith(path) ||
-      path.endsWith(key) ||
-      key.endsWith(path.replace(/^\.\/?/, ""))
-    ) {
+    if (key.endsWith(path) || path.endsWith(key) || key.endsWith(path.replace(/^\.\/?/, ''))) {
       return assetMap[key];
     }
   }
@@ -93,12 +92,8 @@ function resolveAsset(path: string | null) {
 
   // Dev-time warning to make missing mappings visible
   try {
-    const isDev =
-      typeof process !== "undefined"
-        ? process.env.NODE_ENV !== "production"
-        : true;
-    if (isDev)
-      console.warn(`levels loader: could not resolve asset path '${path}'`);
+    const isDev = typeof process !== 'undefined' ? process.env.NODE_ENV !== 'production' : true;
+    if (isDev) console.warn(`levels loader: could not resolve asset path '${path}'`);
   } catch {
     // ignore
   }

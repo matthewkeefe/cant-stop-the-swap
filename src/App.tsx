@@ -1,26 +1,22 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { useLocation } from "react-router-dom";
-import WinLine from "./ui/WinLine";
-import { useNavigate } from "react-router-dom";
-import { Engine } from "./game-core/engine";
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
+import WinLine from './ui/WinLine';
+import { useNavigate } from 'react-router-dom';
+import { Engine } from './game-core/engine';
 
-import {
-  drawStateToCanvas,
-  type Skin,
-  type SrcRect,
-} from "./renderer/canvasRenderer";
+import { drawStateToCanvas, type Skin, type SrcRect } from './renderer/canvasRenderer';
 
-import tilesGemsPng from "./assets/sprites/gems.png";
-import tilesGemsXmlUrl from "./assets/sprites/gems.xml?url";
-import { type Atlas, loadGemsAtlas } from "./atlas"; // atlas helpers moved to src/atlas.ts
-import LEVELS from "./levels";
-import Footer from "./components/Footer";
-import snd0 from "./assets/sounds/impactMining_000.ogg?url";
-import snd1 from "./assets/sounds/impactMining_001.ogg?url";
-import snd2 from "./assets/sounds/impactMining_002.ogg?url";
-import snd3 from "./assets/sounds/impactMining_003.ogg?url";
-import snd4 from "./assets/sounds/impactMining_004.ogg?url";
-import swapSnd from "./assets/sounds/swap.ogg?url";
+import tilesGemsPng from './assets/sprites/gems.png';
+import tilesGemsXmlUrl from './assets/sprites/gems.xml?url';
+import { type Atlas, loadGemsAtlas } from './atlas'; // atlas helpers moved to src/atlas.ts
+import LEVELS from './levels';
+import Footer from './components/Footer';
+import snd0 from './assets/sounds/impactMining_000.ogg?url';
+import snd1 from './assets/sounds/impactMining_001.ogg?url';
+import snd2 from './assets/sounds/impactMining_002.ogg?url';
+import snd3 from './assets/sounds/impactMining_003.ogg?url';
+import snd4 from './assets/sounds/impactMining_004.ogg?url';
+import swapSnd from './assets/sounds/swap.ogg?url';
 
 // Default target lines used when a level doesn't provide one.
 const DEFAULT_TARGET_LINES = 10;
@@ -53,14 +49,14 @@ export default function App() {
   const WIDTH = 6;
   const HEIGHT = 12;
 
-  const [scene, setScene] = useState<"title" | "play">("play");
+  const [scene, setScene] = useState<'title' | 'play'>('play');
   // Detect mobile viewport and adjust UI: on mobile we show a minimal UI.
   const [isMobile, setIsMobile] = useState<boolean>(() => {
     try {
       return (
-        typeof window !== "undefined" &&
+        typeof window !== 'undefined' &&
         window.matchMedia &&
-        window.matchMedia("(max-width:640px)").matches
+        window.matchMedia('(max-width:640px)').matches
       );
     } catch {
       return false;
@@ -75,16 +71,11 @@ export default function App() {
     rate: 0.1,
   });
 
-  const [selectedLevelId, setSelectedLevelId] = useState<string>(
-    LEVELS[0]?.id ?? "level-1"
-  );
+  const [selectedLevelId, setSelectedLevelId] = useState<string>(LEVELS[0]?.id ?? 'level-1');
   // If the user selected a level via the LevelSelectPage, prefer that
   useEffect(() => {
     try {
-      const stored =
-        typeof window !== "undefined"
-          ? localStorage.getItem("selectedLevelId")
-          : null;
+      const stored = typeof window !== 'undefined' ? localStorage.getItem('selectedLevelId') : null;
       if (stored) setSelectedLevelId(stored);
     } catch {
       // ignore storage errors
@@ -115,7 +106,7 @@ export default function App() {
   if (!soundsRef.current) {
     soundsRef.current = [snd0, snd1, snd2, snd3, snd4].map((u) => {
       const a = new Audio(u);
-      a.preload = "auto";
+      a.preload = 'auto';
       try {
         sfxSetRef.current.add(a);
       } catch {
@@ -126,7 +117,7 @@ export default function App() {
   }
   if (!swapRef.current) {
     swapRef.current = new Audio(swapSnd);
-    swapRef.current.preload = "auto";
+    swapRef.current.preload = 'auto';
     try {
       sfxSetRef.current.add(swapRef.current);
     } catch {
@@ -149,36 +140,30 @@ export default function App() {
     risePauseMaxMs: 0,
   });
   // Scores for the current playthrough: array of { levelId, score }
-  const [playthroughScores, setPlaythroughScores] = useState<
-    { levelId: string; score: number }[]
-  >(() => {
-    try {
-      if (typeof window !== "undefined") {
-        const raw = sessionStorage.getItem("currentPlaythrough");
-        return raw
-          ? (JSON.parse(raw) as { levelId: string; score: number }[])
-          : [];
+  const [playthroughScores, setPlaythroughScores] = useState<{ levelId: string; score: number }[]>(
+    () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const raw = sessionStorage.getItem('currentPlaythrough');
+          return raw ? (JSON.parse(raw) as { levelId: string; score: number }[]) : [];
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
-    }
-    return [];
-  });
+      return [];
+    },
+  );
   const [winLine, setWinLine] = useState({ percent: 0, yPx: -9999 });
   const [titleHover, setTitleHover] = useState(false);
   const [optionsHover, setOptionsHover] = useState(false);
   const [levelsHover, setLevelsHover] = useState(false);
   // Volume settings (persisted to localStorage)
   const [musicVolume, setMusicVolume] = useState<number>(() => {
-    const v =
-      typeof window !== "undefined"
-        ? localStorage.getItem("musicVolume")
-        : null;
+    const v = typeof window !== 'undefined' ? localStorage.getItem('musicVolume') : null;
     return v !== null ? Math.max(0, Math.min(1, Number(v))) : 0.25;
   });
   const [sfxVolume, setSfxVolume] = useState<number>(() => {
-    const v =
-      typeof window !== "undefined" ? localStorage.getItem("sfxVolume") : null;
+    const v = typeof window !== 'undefined' ? localStorage.getItem('sfxVolume') : null;
     return v !== null ? Math.max(0, Math.min(1, Number(v))) : 1.0;
   });
 
@@ -186,34 +171,30 @@ export default function App() {
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (!e.key) return;
-      if (e.key === "musicVolume") {
+      if (e.key === 'musicVolume') {
         const v = e.newValue;
         if (v != null) setMusicVolume(Math.max(0, Math.min(1, Number(v))));
-      } else if (e.key === "sfxVolume") {
+      } else if (e.key === 'sfxVolume') {
         const v = e.newValue;
         if (v != null) setSfxVolume(Math.max(0, Math.min(1, Number(v))));
       }
     }
 
-    window.addEventListener("storage", onStorage);
+    window.addEventListener('storage', onStorage);
     // Also listen for same-tab volume update events dispatched by OptionsPage
     const onVolumeEvent = (ev: Event) => {
       try {
-        const d = (ev as CustomEvent).detail as
-          | { music?: number; sfx?: number }
-          | undefined;
+        const d = (ev as CustomEvent).detail as { music?: number; sfx?: number } | undefined;
         if (d) {
-          if (typeof d.music === "number")
-            setMusicVolume(Math.max(0, Math.min(1, d.music)));
-          if (typeof d.sfx === "number")
-            setSfxVolume(Math.max(0, Math.min(1, d.sfx)));
+          if (typeof d.music === 'number') setMusicVolume(Math.max(0, Math.min(1, d.music)));
+          if (typeof d.sfx === 'number') setSfxVolume(Math.max(0, Math.min(1, d.sfx)));
         }
       } catch {
         /* ignore */
       }
     };
-    window.addEventListener("volumechange", onVolumeEvent as EventListener);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener('volumechange', onVolumeEvent as EventListener);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   // Apply volume settings to currently playing audio elements when they change
@@ -287,18 +268,16 @@ export default function App() {
     // If on desktop auto-start the game. On mobile, prefer the title page so
     // the screen stays uncluttered and the player can tap Start explicitly.
     if (!isMobile) {
-      if (scene === "play" && !engineRef.current) {
+      if (scene === 'play' && !engineRef.current) {
         // If navigation provided a startLevelId, use it; otherwise start default
-        const navState = (
-          location as unknown as { state?: { startLevelId?: string } }
-        )?.state;
+        const navState = (location as unknown as { state?: { startLevelId?: string } })?.state;
         const startLevelId = navState?.startLevelId;
         if (startLevelId) startGame(startLevelId);
         else startGame();
       }
     } else {
       // Ensure mobile viewers start on the title page
-      if (scene !== "title") setScene("title");
+      if (scene !== 'title') setScene('title');
     }
     // run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -307,10 +286,10 @@ export default function App() {
   // Keep isMobile updated on resize / orientation change
   useEffect(() => {
     if (!window.matchMedia) return;
-    const mq = window.matchMedia("(max-width:640px)");
+    const mq = window.matchMedia('(max-width:640px)');
     const onChange = (ev: MediaQueryListEvent) => setIsMobile(ev.matches);
     try {
-      mq.addEventListener("change", onChange);
+      mq.addEventListener('change', onChange);
     } catch {
       // Safari fallback for older browsers without addEventListener on MediaQueryList
       const legacy = mq as MediaQueryList & {
@@ -321,7 +300,7 @@ export default function App() {
     }
     return () => {
       try {
-        mq.removeEventListener("change", onChange);
+        mq.removeEventListener('change', onChange);
       } catch {
         const legacy = mq as MediaQueryList & {
           addListener?: (l: (ev: MediaQueryListEvent) => void) => void;
@@ -334,14 +313,11 @@ export default function App() {
 
   // Fade out current music smoothly over `durationMs` then stop and clear ref.
   const fadeOutAndStopMusic = useCallback(
-    (
-      mRef: React.MutableRefObject<HTMLAudioElement | null>,
-      durationMs = 300
-    ) => {
+    (mRef: React.MutableRefObject<HTMLAudioElement | null>, durationMs = 300) => {
       const m = mRef.current;
       if (!m) return;
       try {
-        const startVol = typeof m.volume === "number" ? m.volume : musicVolume;
+        const startVol = typeof m.volume === 'number' ? m.volume : musicVolume;
         const start = performance.now();
         const step = 30; // ms tick
         const tick = () => {
@@ -394,7 +370,7 @@ export default function App() {
         }
       }
     },
-    [musicVolume]
+    [musicVolume],
   );
 
   // Force-stop all tracked audio instances immediately (no fade)
@@ -446,16 +422,12 @@ export default function App() {
   // Pause music and stop playing SFX when navigating away from the /play route
   useEffect(() => {
     try {
-      const path = location.pathname || "";
+      const path = location.pathname || '';
       // Treat any route under /play as the active game.
-      if (path.startsWith("/play")) return;
+      if (path.startsWith('/play')) return;
 
       // If navigating to Title, Options, or Level Select, aggressively stop music
-      if (
-        path === "/" ||
-        path.startsWith("/options") ||
-        path.startsWith("/levels")
-      ) {
+      if (path === '/' || path.startsWith('/options') || path.startsWith('/levels')) {
         // Try a graceful fade, but also force-stop all tracked music to prevent lingering audio
         try {
           fadeOutAndStopMusic(musicRef, 200);
@@ -503,7 +475,7 @@ export default function App() {
         tilesBlackAtlasRef.current = gems;
         setAtlasesReady(true);
       } catch (e) {
-        console.error("Failed to load gems atlases", e);
+        console.error('Failed to load gems atlases', e);
         setAtlasesReady(false);
       }
     })();
@@ -515,8 +487,8 @@ export default function App() {
     canvas.height = HEIGHT * CELL;
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (scene === "title") {
-        if (e.key === "Enter") {
+      if (scene === 'title') {
+        if (e.key === 'Enter') {
           startGame();
         }
         return;
@@ -527,19 +499,14 @@ export default function App() {
       // Use the ref to ensure we read the latest selected level id.
       const gs = engineRef.current.getState();
       if (gs.hasWon) {
-        if (
-          e.key === "z" ||
-          e.key === "Z" ||
-          e.key === " " ||
-          e.key === "Space"
-        ) {
+        if (e.key === 'z' || e.key === 'Z' || e.key === ' ' || e.key === 'Space') {
           e.preventDefault();
           const currentId = selectedLevelIdRef.current;
           const idx = LEVELS.findIndex((l) => l.id === currentId);
           const nextIdx = idx + 1;
           // If this was the final level, go to the You Beat the Game page.
           if (nextIdx >= LEVELS.length) {
-            navigate("/you-beat");
+            navigate('/you-beat');
           } else {
             const nextId = LEVELS[nextIdx].id;
             advanceToLevel(nextId);
@@ -551,27 +518,27 @@ export default function App() {
       }
 
       switch (e.key) {
-        case "ArrowLeft":
+        case 'ArrowLeft':
           engineRef.current.moveCursor(-1, 0);
           break;
-        case "ArrowRight":
+        case 'ArrowRight':
           engineRef.current.moveCursor(1, 0);
           break;
-        case "ArrowUp":
+        case 'ArrowUp':
           engineRef.current.moveCursor(0, -1);
           break;
-        case "ArrowDown":
+        case 'ArrowDown':
           engineRef.current.moveCursor(0, 1);
           break;
-        case "z":
-        case "Z":
-        case " ":
-        case "Space":
+        case 'z':
+        case 'Z':
+        case ' ':
+        case 'Space':
           e.preventDefault();
           if (!pausedRef.current) engineRef.current.swap();
           break;
-        case "x":
-        case "X": {
+        case 'x':
+        case 'X': {
           // When X is pressed, switch the raise rate to 2 rows/sec while held.
           // If already held, ignore repeats.
           if (!xHoldRef.current && engineRef.current) {
@@ -587,26 +554,26 @@ export default function App() {
           }
           break;
         }
-        case "r":
-        case "R":
+        case 'r':
+        case 'R':
           startGame();
           break;
-        case "p":
-        case "P":
+        case 'p':
+        case 'P':
           togglePause();
           break;
         default:
           break;
       }
     };
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener('keydown', onKeyDown);
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "x" || e.key === "X") {
+      if (e.key === 'x' || e.key === 'X') {
         // Restore previous raise rate when X is released
         if (xHoldRef.current && engineRef.current) {
           xHoldRef.current = false;
           const prev = xPrevRateRef.current;
-          if (typeof prev === "number" && prev > 0) {
+          if (typeof prev === 'number' && prev > 0) {
             try {
               engineRef.current.autoRiseRateRowsPerSec = prev;
               engineRef.current.scrollSpeedPxPerSec = prev * engineRef.current.cellSize;
@@ -627,7 +594,7 @@ export default function App() {
         }
       }
     };
-    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener('keyup', onKeyUp);
 
     // Mobile pointer handlers: enable touch-to-move and tap-to-swap when mobile
     const canvasEl = canvasRef.current;
@@ -663,8 +630,7 @@ export default function App() {
       if (!touchStateRef.current.active) return;
       const dx = ev.clientX - touchStateRef.current.startX;
       const dy = ev.clientY - touchStateRef.current.startY;
-      if (Math.hypot(dx, dy) > MOVE_THRESHOLD_PX)
-        touchStateRef.current.moved = true;
+      if (Math.hypot(dx, dy) > MOVE_THRESHOLD_PX) touchStateRef.current.moved = true;
       if (!engineRef.current) return;
       const rect = canvasEl!.getBoundingClientRect();
       const px = ev.clientX - rect.left;
@@ -692,21 +658,21 @@ export default function App() {
         try {
           engineRef.current?.swap();
         } catch {
-          console.log("Swap failed");
+          console.log('Swap failed');
         }
       }
       ev.preventDefault();
     };
 
     if (canvasEl) {
-      canvasEl.addEventListener("pointerdown", onPointerDown);
-      canvasEl.addEventListener("pointermove", onPointerMove);
-      canvasEl.addEventListener("pointerup", onPointerUp);
-      canvasEl.addEventListener("pointercancel", onPointerUp);
+      canvasEl.addEventListener('pointerdown', onPointerDown);
+      canvasEl.addEventListener('pointermove', onPointerMove);
+      canvasEl.addEventListener('pointerup', onPointerUp);
+      canvasEl.addEventListener('pointercancel', onPointerUp);
     }
     // Auto-pause when the tab/window loses focus
     const onVisibilityChange = () => {
-      if (scene === "play" && !pausedRef.current && document.hidden) {
+      if (scene === 'play' && !pausedRef.current && document.hidden) {
         // behave as if pause button was pressed
         pausedByFocusRef.current = true;
         togglePause();
@@ -714,19 +680,19 @@ export default function App() {
     };
 
     const onWindowBlur = () => {
-      if (scene === "play" && !pausedRef.current) {
+      if (scene === 'play' && !pausedRef.current) {
         // behave as if pause button was pressed
         pausedByFocusRef.current = true;
         togglePause();
       }
     };
 
-    window.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("blur", onWindowBlur);
+    window.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('blur', onWindowBlur);
 
     let raf = 0;
     let last = performance.now();
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext('2d')!;
 
     // Main game loop
     const loop = () => {
@@ -734,7 +700,7 @@ export default function App() {
       const dt = now - last;
       last = now;
 
-      if (scene === "play" && engineRef.current) {
+      if (scene === 'play' && engineRef.current) {
         engineRef.current.update(dt);
         const s = engineRef.current.getState();
 
@@ -773,10 +739,7 @@ export default function App() {
           // Map 5 color indices -> 5 different “tile” looks.
           const keys = Object.keys(atlas.frames).sort();
           const candidates = keys.filter((k) => /_color/i.test(k));
-          const order = (candidates.length >= 5 ? candidates : keys).slice(
-            0,
-            5
-          );
+          const order = (candidates.length >= 5 ? candidates : keys).slice(0, 5);
 
           // Precompute a mapping from base frame -> clear variant so we
           // preserve the exact shape when swapping to the clear sprite.
@@ -800,22 +763,15 @@ export default function App() {
             if (!found) {
               found = Object.keys(atlas.frames).find((k) => {
                 const kl = k.toLowerCase();
-                return (
-                  kl.includes(lowerBase) &&
-                  /_clear|-clear|clear|matched/i.test(kl)
-                );
+                return kl.includes(lowerBase) && /_clear|-clear|clear|matched/i.test(kl);
               });
             }
             clearMap[baseName] = found;
           }
 
-          const pickByColor = (
-            i: number,
-            variant: "normal" | "clear" = "normal"
-          ): SrcRect => {
-            const baseName =
-              order[Math.max(0, Math.min(order.length - 1, i | 0))];
-            if (variant === "clear") {
+          const pickByColor = (i: number, variant: 'normal' | 'clear' = 'normal'): SrcRect => {
+            const baseName = order[Math.max(0, Math.min(order.length - 1, i | 0))];
+            if (variant === 'clear') {
               const clearName = clearMap[baseName];
               if (clearName && atlas.frames[clearName]) {
                 const f = atlas.frames[clearName];
@@ -843,30 +799,11 @@ export default function App() {
           s.cursorY === 0 &&
           !(lastCursorRef.current.x === 0 && lastCursorRef.current.y === 0)
         ) {
-          engineRef.current.setCursorAbsolute(
-            lastCursorRef.current.x,
-            lastCursorRef.current.y
-          );
+          engineRef.current.setCursorAbsolute(lastCursorRef.current.x, lastCursorRef.current.y);
           const s2 = engineRef.current.getState();
-          drawStateToCanvas(
-            ctx,
-            s2,
-            CELL,
-            dt,
-            s2.scrollOffsetPx ?? 0,
-            bgSkin,
-            fgSkin
-          );
+          drawStateToCanvas(ctx, s2, CELL, dt, s2.scrollOffsetPx ?? 0, bgSkin, fgSkin);
         } else {
-          drawStateToCanvas(
-            ctx,
-            s,
-            CELL,
-            dt,
-            s.scrollOffsetPx ?? 0,
-            bgSkin,
-            fgSkin
-          );
+          drawStateToCanvas(ctx, s, CELL, dt, s.scrollOffsetPx ?? 0, bgSkin, fgSkin);
         }
 
         lastCursorRef.current = { x: s.cursorX, y: s.cursorY };
@@ -876,8 +813,7 @@ export default function App() {
         const total = Math.max(1, engine.totalLevelLines || 1);
         const rows = Math.max(0, engine.rowsInserted || 0);
         const pct = Math.max(0, Math.min(100, (rows / total) * 100));
-        const rawWinY =
-          typeof s.winLineY === "number" ? s.winLineY - 2.5 : -9999;
+        const rawWinY = typeof s.winLineY === 'number' ? s.winLineY - 2.5 : -9999;
         // Only clamp the lower bound so the win line can remain off-screen
         // below the canvas when rows haven't risen far enough. Previously
         // clamping the upper bound forced off-screen values to the bottom
@@ -917,13 +853,13 @@ export default function App() {
           }
         }
 
-        canvas.style.filter = s.hasWon || s.hasLost ? "blur(3px)" : "none";
+        canvas.style.filter = s.hasWon || s.hasLost ? 'blur(3px)' : 'none';
 
         // Update DOM cursor overlay to sit above WinLine (if present)
         try {
           const overlay = cursorOverlayRef.current;
           if (overlay) {
-            const childId = "dom-cursor-box";
+            const childId = 'dom-cursor-box';
             let child = overlay.querySelector<HTMLDivElement>(`#${childId}`);
             const cx = s.cursorX * CELL + 1.5;
             const cy = s.cursorY * CELL - (s.scrollOffsetPx ?? 0) + 1.5;
@@ -959,23 +895,21 @@ export default function App() {
                   </defs>
                   <rect x="${strokeWidth / 2}" y="${
                 strokeWidth / 2
-              }" rx="${radius}" ry="${radius}" width="${
-                w - strokeWidth
-              }" height="${h - strokeWidth}" fill="none"
+              }" rx="${radius}" ry="${radius}" width="${w - strokeWidth}" height="${
+                h - strokeWidth
+              }" fill="none"
                     stroke="url(#cursor-grad)" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashLen} ${dashGap}" filter="url(#cursor-glow)" />
                 </svg>
               `;
-              overlay.insertAdjacentHTML("beforeend", svg);
+              overlay.insertAdjacentHTML('beforeend', svg);
               child = overlay.querySelector<HTMLDivElement>(
-                `#${childId}`
+                `#${childId}`,
               ) as unknown as HTMLDivElement;
             }
             // position the SVG overlay to match canvas cursor
             child.style.width = `${w}px`;
             child.style.height = `${h}px`;
-            child.style.transform = `translate(${Math.round(
-              cx
-            )}px, ${Math.round(cy)}px)`;
+            child.style.transform = `translate(${Math.round(cx)}px, ${Math.round(cy)}px)`;
           }
         } catch {
           /* ignore overlay positioning errors */
@@ -983,7 +917,7 @@ export default function App() {
       } else {
         // Title scene: clear
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#0f0f12";
+        ctx.fillStyle = '#0f0f12';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
@@ -992,15 +926,15 @@ export default function App() {
     raf = requestAnimationFrame(loop);
 
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
-  window.removeEventListener("visibilitychange", onVisibilityChange);
-  window.removeEventListener("blur", onWindowBlur);
-  window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('blur', onWindowBlur);
+      window.removeEventListener('keyup', onKeyUp);
       if (canvasEl) {
-        canvasEl.removeEventListener("pointerdown", onPointerDown);
-        canvasEl.removeEventListener("pointermove", onPointerMove);
-        canvasEl.removeEventListener("pointerup", onPointerUp);
-        canvasEl.removeEventListener("pointercancel", onPointerUp);
+        canvasEl.removeEventListener('pointerdown', onPointerDown);
+        canvasEl.removeEventListener('pointermove', onPointerMove);
+        canvasEl.removeEventListener('pointerup', onPointerUp);
+        canvasEl.removeEventListener('pointercancel', onPointerUp);
       }
       cancelAnimationFrame(raf);
     };
@@ -1063,7 +997,7 @@ export default function App() {
           }
           const m = new Audio(lvl.music);
           m.loop = true;
-          m.preload = "auto";
+          m.preload = 'auto';
           m.volume = musicVolume;
           m.play().catch(() => {});
           try {
@@ -1080,17 +1014,13 @@ export default function App() {
   }
 
   // Start the game with initial settings
-  function startGame(
-    levelId?: string,
-    opts?: { preservePlaythrough?: boolean }
-  ) {
+  function startGame(levelId?: string, opts?: { preservePlaythrough?: boolean }) {
     const preserve = opts?.preservePlaythrough ?? false;
     // If we're starting a fresh playthrough (not preserving), reset stored scores
     if (!preserve) {
       try {
         setPlaythroughScores([]);
-        if (typeof window !== "undefined")
-          sessionStorage.removeItem("currentPlaythrough");
+        if (typeof window !== 'undefined') sessionStorage.removeItem('currentPlaythrough');
       } catch {
         /* ignore */
       }
@@ -1133,24 +1063,21 @@ export default function App() {
     const MIN_RAISE_RATE = 0.05; // rows per second (minimum)
     const MAX_RAISE_RATE = 0.6; // rows per second (maximum for normalized rates)
 
-    const mapNormalized = (v: number) =>
-      MIN_RAISE_RATE + v * (MAX_RAISE_RATE - MIN_RAISE_RATE);
+    const mapNormalized = (v: number) => MIN_RAISE_RATE + v * (MAX_RAISE_RATE - MIN_RAISE_RATE);
 
     // Normalize fallback from UI input: if input rate is in [0,1] treat as normalized
     let fallbackRate = engineRef.current.autoRiseRateRowsPerSec ?? MAX_RAISE_RATE;
-    if (typeof inputs.rate === "number" && inputs.rate > 0) {
+    if (typeof inputs.rate === 'number' && inputs.rate > 0) {
       fallbackRate = inputs.rate <= 1 ? mapNormalized(inputs.rate) : inputs.rate;
     } else {
       fallbackRate = Math.max(fallbackRate, MIN_RAISE_RATE);
     }
 
     let chosenRate: number;
-    if (typeof effectiveInputs.rate === "number" && effectiveInputs.rate > 0) {
+    if (typeof effectiveInputs.rate === 'number' && effectiveInputs.rate > 0) {
       // If level-provided rate is normalized (<=1) map into usable range.
       chosenRate =
-        effectiveInputs.rate <= 1
-          ? mapNormalized(effectiveInputs.rate)
-          : effectiveInputs.rate;
+        effectiveInputs.rate <= 1 ? mapNormalized(effectiveInputs.rate) : effectiveInputs.rate;
     } else {
       chosenRate = fallbackRate;
     }
@@ -1241,7 +1168,7 @@ export default function App() {
         }
         const m = new Audio(lvlForStart.music);
         m.loop = true;
-        m.preload = "auto";
+        m.preload = 'auto';
         m.volume = 0.25; // default music volume
         m.play().catch(() => {});
         try {
@@ -1259,7 +1186,7 @@ export default function App() {
     const total = Math.max(
       1,
       // prefer explicit targetLines; fall back to a sane default
-      effectiveInputs.targetLines || DEFAULT_TARGET_LINES
+      effectiveInputs.targetLines || DEFAULT_TARGET_LINES,
     );
     const queueLen = total + 16;
     const rows: number[][] = [];
@@ -1268,9 +1195,7 @@ export default function App() {
       const row: number[] = [];
       for (let x = 0; x < WIDTH; x++) {
         // random color index based on engine palette
-        const colorIndex = Math.floor(
-          Math.random() * engineRef.current.colors.length
-        );
+        const colorIndex = Math.floor(Math.random() * engineRef.current.colors.length);
         row.push(colorIndex);
       }
       rows.push(row);
@@ -1278,7 +1203,7 @@ export default function App() {
 
     engineRef.current.setLevelQueue(
       rows,
-      Math.max(0, Math.min(HEIGHT, effectiveInputs.startingLines))
+      Math.max(0, Math.min(HEIGHT, effectiveInputs.startingLines)),
     );
 
     // Set the totalLevelLines so engine computes the rising win line; the
@@ -1288,7 +1213,7 @@ export default function App() {
     // configured targetLines as the total for the engine's win-line math.
     engineRef.current.totalLevelLines = total;
 
-    setScene("play");
+    setScene('play');
     setHud({
       score: 0,
       matches: 0,
@@ -1317,13 +1242,14 @@ export default function App() {
           // even if this function was called from an older closure.
           const prevId = selectedLevelIdRef.current;
           // Prefer the engine state score when available to avoid HUD lag.
-          const scoreToRecord = typeof engineState?.score === "number" ? engineState!.score : hud.score;
+          const scoreToRecord =
+            typeof engineState?.score === 'number' ? engineState!.score : hud.score;
           const entry = { levelId: prevId, score: scoreToRecord };
           setPlaythroughScores((p) => {
             const next = [...p, entry];
             try {
-              if (typeof window !== "undefined")
-                sessionStorage.setItem("currentPlaythrough", JSON.stringify(next));
+              if (typeof window !== 'undefined')
+                sessionStorage.setItem('currentPlaythrough', JSON.stringify(next));
             } catch {
               /* ignore */
             }
@@ -1372,63 +1298,60 @@ export default function App() {
   return (
     <div
       style={{
-        minHeight: "100vh",
-        width: "100vw",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "flex-start",
-        background: "#0b0b0e",
-        color: "#cbd5e1",
-        fontFamily: "ui-sans-serif, system-ui",
+        minHeight: '100vh',
+        width: '100vw',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        background: '#0b0b0e',
+        color: '#cbd5e1',
+        fontFamily: 'ui-sans-serif, system-ui',
         padding: 16,
-        boxSizing: "border-box",
+        boxSizing: 'border-box',
       }}
     >
       <div
         style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
         }}
       >
         <div
           style={{
-            display: "grid",
+            display: 'grid',
             gap: 16,
-            alignItems: "start",
+            alignItems: 'start',
           }}
         >
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
               gap: 16,
-              alignItems: "start",
+              alignItems: 'start',
               width: WIDTH * CELL + 280,
-              maxWidth: "90vw",
+              maxWidth: '90vw',
             }}
           >
             <div>
               {/* Game grid and overlays */}
               <div
                 style={{
-                  position: "relative",
+                  position: 'relative',
                   width: WIDTH * CELL,
-                  border: "2px solid #888",
-                  backgroundColor: "#0f0f12",
+                  border: '2px solid #888',
+                  backgroundColor: '#0f0f12',
                   borderRadius: 8,
-                  overflow: "hidden",
+                  overflow: 'hidden',
                   // If the selected level has a background, apply it.
-                  backgroundImage: LEVELS.find((l) => l.id === selectedLevelId)
-                    ?.background
-                    ? `url(${
-                        LEVELS.find((l) => l.id === selectedLevelId)?.background
-                      })`
+                  backgroundImage: LEVELS.find((l) => l.id === selectedLevelId)?.background
+                    ? `url(${LEVELS.find((l) => l.id === selectedLevelId)?.background})`
                     : undefined,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
                 }}
               >
                 <canvas
@@ -1437,7 +1360,7 @@ export default function App() {
                   height={HEIGHT * CELL}
                   style={{
                     borderRadius: 8,
-                    position: "relative",
+                    position: 'relative',
                     zIndex: 1000,
                   }}
                 />
@@ -1446,12 +1369,12 @@ export default function App() {
                   ref={cursorOverlayRef}
                   aria-hidden
                   style={{
-                    position: "absolute",
+                    position: 'absolute',
                     left: 0,
                     top: 0,
                     width: WIDTH * CELL,
                     height: HEIGHT * CELL,
-                    pointerEvents: "none",
+                    pointerEvents: 'none',
                     zIndex: 1400,
                   }}
                 />
@@ -1459,20 +1382,20 @@ export default function App() {
                 <div
                   aria-hidden
                   style={{
-                    position: "absolute",
+                    position: 'absolute',
                     left: 0,
                     right: 0,
                     top: 0,
                     height: 11,
-                    overflow: "hidden",
-                    pointerEvents: "none",
+                    overflow: 'hidden',
+                    pointerEvents: 'none',
                     opacity: 0.8,
                     zIndex: 1100,
                   }}
                 >
                   <div
                     style={{
-                      position: "absolute",
+                      position: 'absolute',
                       left: 0,
                       top: 0,
                       bottom: 0,
@@ -1480,31 +1403,29 @@ export default function App() {
                         0,
                         Math.min(
                           100,
-                          hud.risePauseMaxMs
-                            ? (hud.risePauseMs / hud.risePauseMaxMs) * 100
-                            : 0
-                        )
+                          hud.risePauseMaxMs ? (hud.risePauseMs / hud.risePauseMaxMs) * 100 : 0,
+                        ),
                       )}%`,
-                      background: "linear-gradient(90deg,#6ee7b7,#34d399)",
-                      transition: "width 120ms linear",
+                      background: 'linear-gradient(90deg,#6ee7b7,#34d399)',
+                      transition: 'width 120ms linear',
                     }}
                   ></div>
                   {/* STOP label: shows only when the gauge is active (risePauseMaxMs > 0) */}
                   {hud.risePauseMs > 0 && (
                     <div
                       style={{
-                        position: "absolute",
+                        position: 'absolute',
                         left: 4,
-                        top: "50%",
-                        transform: "translateY(-50%)",
+                        top: '50%',
+                        transform: 'translateY(-50%)',
                         fontSize: 9,
                         fontWeight: 800,
                         lineHeight: 1,
-                        color: "#333",
-                        textShadow: "0 2px 2px rgba(223, 210, 210, 1)",
-                        pointerEvents: "none",
+                        color: '#333',
+                        textShadow: '0 2px 2px rgba(223, 210, 210, 1)',
+                        pointerEvents: 'none',
                         zIndex: 1110,
-                        userSelect: "none",
+                        userSelect: 'none',
                       }}
                     >
                       STOP!
@@ -1514,28 +1435,26 @@ export default function App() {
                 {/* Soft fade gradients at top and bottom to mask incoming rows */}
                 <div
                   style={{
-                    position: "absolute",
+                    position: 'absolute',
                     left: 0,
                     right: 0,
                     top: 0,
                     height: CELL,
-                    pointerEvents: "none",
-                    background:
-                      "linear-gradient(to bottom, rgba(11,11,14,1), rgba(11,11,14,0))",
+                    pointerEvents: 'none',
+                    background: 'linear-gradient(to bottom, rgba(11,11,14,1), rgba(11,11,14,0))',
                     borderTopLeftRadius: 8,
                     borderTopRightRadius: 8,
                   }}
                 />
                 <div
                   style={{
-                    position: "absolute",
+                    position: 'absolute',
                     left: 0,
                     right: 0,
                     bottom: 0,
                     height: CELL,
-                    pointerEvents: "none",
-                    background:
-                      "linear-gradient(to top, rgba(11,11,14,1), rgba(11,11,14,0))",
+                    pointerEvents: 'none',
+                    background: 'linear-gradient(to top, rgba(11,11,14,1), rgba(11,11,14,0))',
                     borderBottomLeftRadius: 8,
                     borderBottomRightRadius: 8,
                   }}
@@ -1546,7 +1465,7 @@ export default function App() {
                   yPx={winLine.yPx}
                   aria-label="Win threshold"
                   style={{
-                    filter: hud.hasWon || hud.hasLost ? "blur(3px)" : "none",
+                    filter: hud.hasWon || hud.hasLost ? 'blur(3px)' : 'none',
                   }}
                 />
                 {/* Title button at top-right of the board */}
@@ -1580,22 +1499,22 @@ export default function App() {
                       risePauseMaxMs: 0,
                     });
                     pausedByFocusRef.current = false;
-                    navigate("/");
+                    navigate('/');
                   }}
                   style={{
-                    position: "absolute",
+                    position: 'absolute',
                     right: 8,
                     top: 8,
                     zIndex: 1300,
-                    padding: "6px 10px",
+                    padding: '6px 10px',
                     fontSize: 14,
                     borderRadius: 6,
-                    border: "none",
-                    background: "rgba(0,0,0,0.5)",
-                    color: "#fff",
-                    cursor: "pointer",
+                    border: 'none',
+                    background: 'rgba(0,0,0,0.5)',
+                    color: '#fff',
+                    cursor: 'pointer',
                     opacity: titleHover ? 1 : 0.25,
-                    transition: "opacity 160ms ease-in-out",
+                    transition: 'opacity 160ms ease-in-out',
                   }}
                 >
                   Title
@@ -1631,23 +1550,23 @@ export default function App() {
                       risePauseMaxMs: 0,
                     });
                     pausedByFocusRef.current = false;
-                    navigate("/options");
+                    navigate('/options');
                   }}
                   aria-label="Options"
                   style={{
-                    position: "absolute",
+                    position: 'absolute',
                     right: 124,
                     top: 8,
                     zIndex: 1300,
-                    padding: "6px 10px",
+                    padding: '6px 10px',
                     fontSize: 14,
                     borderRadius: 6,
-                    border: "none",
-                    background: "rgba(0,0,0,0.5)",
-                    color: "#fff",
-                    cursor: "pointer",
+                    border: 'none',
+                    background: 'rgba(0,0,0,0.5)',
+                    color: '#fff',
+                    cursor: 'pointer',
                     opacity: optionsHover ? 1 : 0.25,
-                    transition: "opacity 160ms ease-in-out",
+                    transition: 'opacity 160ms ease-in-out',
                   }}
                 >
                   Options
@@ -1683,193 +1602,185 @@ export default function App() {
                       risePauseMaxMs: 0,
                     });
                     pausedByFocusRef.current = false;
-                    navigate("/levels");
+                    navigate('/levels');
                   }}
                   aria-label="Levels"
                   style={{
-                    position: "absolute",
+                    position: 'absolute',
                     right: 60,
                     top: 8,
                     zIndex: 1300,
-                    padding: "6px 10px",
+                    padding: '6px 10px',
                     fontSize: 14,
                     borderRadius: 6,
-                    border: "none",
-                    background: "rgba(0,0,0,0.5)",
-                    color: "#fff",
-                    cursor: "pointer",
+                    border: 'none',
+                    background: 'rgba(0,0,0,0.5)',
+                    color: '#fff',
+                    cursor: 'pointer',
                     opacity: levelsHover ? 1 : 0.25,
-                    transition: "opacity 160ms ease-in-out",
+                    transition: 'opacity 160ms ease-in-out',
                   }}
                 >
                   Levels
                 </button>
-                {scene === "play" &&
-                  !isMobile &&
-                  (hud.hasWon || hud.hasLost) && (
+                {scene === 'play' && !isMobile && (hud.hasWon || hud.hasLost) && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'grid',
+                      placeItems: 'center',
+                      color: '#fff',
+                      textShadow: '0 2px 8px rgba(0,0,0,0.6)',
+                      fontWeight: 700,
+                      fontSize: 32,
+                      letterSpacing: 1,
+                      zIndex: 1200, // ensure overlay appears above WinLine
+                    }}
+                  >
                     <div
                       style={{
-                        position: "absolute",
-                        inset: 0,
-                        display: "grid",
-                        placeItems: "center",
-                        color: "#fff",
-                        textShadow: "0 2px 8px rgba(0,0,0,0.6)",
-                        fontWeight: 700,
-                        fontSize: 32,
-                        letterSpacing: 1,
-                        zIndex: 1200, // ensure overlay appears above WinLine
+                        padding: '12px 16px',
+                        borderRadius: 8,
+                        background: 'rgba(0,0,0,0.5)',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
                       }}
                     >
-                      <div
-                        style={{
-                          padding: "12px 16px",
-                          borderRadius: 8,
-                          background: "rgba(0,0,0,0.5)",
-                          border: "1px solid rgba(255,255,255,0.2)",
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                        }}
-                      >
-                        {hud.hasWon ? "You win!" : "Game Over!"}
-                        {hud.hasWon && (
-                          <button
-                            style={{
-                              marginTop: 18,
-                              fontSize: 20,
-                              padding: "8px 24px",
-                              borderRadius: 6,
-                              border: "none",
-                              background: "#34d399",
-                              color: "#222",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-                            }}
-                            onClick={() => {
-                              const idx = LEVELS.findIndex(
-                                (l) => l.id === selectedLevelId
-                              );
-                              const nextIdx = idx + 1;
-                              if (nextIdx >= LEVELS.length) {
-                                navigate("/you-beat");
-                              } else {
-                                const nextId = LEVELS[nextIdx].id;
-                                advanceToLevel(nextId);
-                              }
-                            }}
-                          >
-                            Next Level
-                          </button>
-                        )}
-                        {hud.hasLost && (
-                          <button
-                            style={{
-                              marginTop: 18,
-                              fontSize: 20,
-                              padding: "8px 24px",
-                              borderRadius: 6,
-                              border: "none",
-                              background: "#f87171",
-                              color: "#222",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-                            }}
-                            onClick={() => {
-                              // stop music and playing clones, reset engine and HUD, go to title
-                              if (musicRef.current)
-                                fadeOutAndStopMusic(musicRef, 200);
-                              for (const a of playingClonesRef.current) {
-                                try {
-                                  a.pause();
-                                  a.currentTime = 0;
-                                } catch {
-                                  /* ignore clone stop errors */
-                                }
-                              }
-                              playingClonesRef.current = [];
-                              engineRef.current = null;
-                              setPaused(false);
-                              pausedRef.current = false;
-                              setHud({
-                                score: 0,
-                                matches: 0,
-                                chains: 0,
-                                linesEq: 0,
-                                tilesAbove: 0,
-                                hasWon: false,
-                                hasLost: false,
-                                risePauseMs: 0,
-                                risePauseMaxMs: 0,
-                              });
-                              pausedByFocusRef.current = false;
-                              navigate("/");
-                            }}
-                          >
-                            Return to Title
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                {/* Continue overlay for focus-caused pause */}
-                {scene === "play" &&
-                  !isMobile &&
-                  paused &&
-                  pausedByFocusRef.current && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        display: "grid",
-                        placeItems: "center",
-                        color: "#fff",
-                        textShadow: "0 2px 8px rgba(0,0,0,0.6)",
-                        fontWeight: 700,
-                        fontSize: 32,
-                        letterSpacing: 1,
-                        zIndex: 1200,
-                      }}
-                    >
-                      <div
-                        style={{
-                          padding: "12px 16px",
-                          borderRadius: 8,
-                          background: "rgba(0,0,0,0.5)",
-                          border: "1px solid rgba(255,255,255,0.2)",
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                        }}
-                      >
-                        <div>Paused - Click Continue to resume</div>
+                      {hud.hasWon ? 'You win!' : 'Game Over!'}
+                      {hud.hasWon && (
                         <button
                           style={{
                             marginTop: 18,
                             fontSize: 20,
-                            padding: "8px 24px",
+                            padding: '8px 24px',
                             borderRadius: 6,
-                            border: "none",
-                            background: "#34d399",
-                            color: "#222",
+                            border: 'none',
+                            background: '#34d399',
+                            color: '#222',
                             fontWeight: 700,
-                            cursor: "pointer",
-                            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                           }}
                           onClick={() => {
-                            pausedByFocusRef.current = false;
-                            togglePause();
+                            const idx = LEVELS.findIndex((l) => l.id === selectedLevelId);
+                            const nextIdx = idx + 1;
+                            if (nextIdx >= LEVELS.length) {
+                              navigate('/you-beat');
+                            } else {
+                              const nextId = LEVELS[nextIdx].id;
+                              advanceToLevel(nextId);
+                            }
                           }}
                         >
-                          Continue
+                          Next Level
                         </button>
-                      </div>
+                      )}
+                      {hud.hasLost && (
+                        <button
+                          style={{
+                            marginTop: 18,
+                            fontSize: 20,
+                            padding: '8px 24px',
+                            borderRadius: 6,
+                            border: 'none',
+                            background: '#f87171',
+                            color: '#222',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                          }}
+                          onClick={() => {
+                            // stop music and playing clones, reset engine and HUD, go to title
+                            if (musicRef.current) fadeOutAndStopMusic(musicRef, 200);
+                            for (const a of playingClonesRef.current) {
+                              try {
+                                a.pause();
+                                a.currentTime = 0;
+                              } catch {
+                                /* ignore clone stop errors */
+                              }
+                            }
+                            playingClonesRef.current = [];
+                            engineRef.current = null;
+                            setPaused(false);
+                            pausedRef.current = false;
+                            setHud({
+                              score: 0,
+                              matches: 0,
+                              chains: 0,
+                              linesEq: 0,
+                              tilesAbove: 0,
+                              hasWon: false,
+                              hasLost: false,
+                              risePauseMs: 0,
+                              risePauseMaxMs: 0,
+                            });
+                            pausedByFocusRef.current = false;
+                            navigate('/');
+                          }}
+                        >
+                          Return to Title
+                        </button>
+                      )}
                     </div>
-                  )}
+                  </div>
+                )}
+                {/* Continue overlay for focus-caused pause */}
+                {scene === 'play' && !isMobile && paused && pausedByFocusRef.current && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'grid',
+                      placeItems: 'center',
+                      color: '#fff',
+                      textShadow: '0 2px 8px rgba(0,0,0,0.6)',
+                      fontWeight: 700,
+                      fontSize: 32,
+                      letterSpacing: 1,
+                      zIndex: 1200,
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: 8,
+                        background: 'rgba(0,0,0,0.5)',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <div>Paused - Click Continue to resume</div>
+                      <button
+                        style={{
+                          marginTop: 18,
+                          fontSize: 20,
+                          padding: '8px 24px',
+                          borderRadius: 6,
+                          border: 'none',
+                          background: '#34d399',
+                          color: '#222',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                        }}
+                        onClick={() => {
+                          pausedByFocusRef.current = false;
+                          togglePause();
+                        }}
+                      >
+                        Continue
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {/* Mobile swap button: simple floating control for tap-to-swap */}
-                {isMobile && scene === "play" && (
+                {isMobile && scene === 'play' && (
                   <button
                     onClick={() => {
                       try {
@@ -1879,17 +1790,17 @@ export default function App() {
                       }
                     }}
                     style={{
-                      position: "absolute",
+                      position: 'absolute',
                       right: 12,
                       bottom: 12,
                       zIndex: 30,
-                      padding: "12px 16px",
+                      padding: '12px 16px',
                       fontSize: 18,
                       borderRadius: 8,
-                      border: "none",
-                      background: "#34d399",
-                      color: "#062017",
-                      boxShadow: "0 6px 18px rgba(0,0,0,0.3)",
+                      border: 'none',
+                      background: '#34d399',
+                      color: '#062017',
+                      boxShadow: '0 6px 18px rgba(0,0,0,0.3)',
                     }}
                   >
                     Swap
@@ -1908,16 +1819,15 @@ export default function App() {
                 {/* Title and small intro moved to the right HUD */}
                 <div style={{ marginBottom: 10 }}>
                   <h2 style={{ margin: 0 }}>Can't Stop the Swap</h2>
-                  {scene === "title" ? (
+                  {scene === 'title' ? (
                     <p style={{ marginTop: 4, opacity: 0.9 }}>
-                      Press <strong>Enter</strong> or click{" "}
-                      <strong>Start</strong>.
+                      Press <strong>Enter</strong> or click <strong>Start</strong>.
                     </p>
                   ) : null}
                 </div>
 
                 {/* Score HUD moved above settings */}
-                {scene === "play" && (
+                {scene === 'play' && (
                   <div style={{ fontSize: 14, opacity: 0.9, marginBottom: 16 }}>
                     <div style={{ fontSize: 24, marginBottom: 6 }}>
                       {/* rise pause indicator already shown above the grid; keep this space for consistency */}
@@ -1935,7 +1845,7 @@ export default function App() {
                       Current chain: <strong>x{Math.max(1, hud.chains)}</strong>
                     </div>
                     <div>
-                      Lines cleared (eq): <strong>{hud.linesEq}</strong> /{" "}
+                      Lines cleared (eq): <strong>{hud.linesEq}</strong> /{' '}
                       <strong>{inputs.targetLines}</strong>
                     </div>
                     <div>
@@ -1944,8 +1854,8 @@ export default function App() {
                   </div>
                 )}
                 <div style={{ marginBottom: 8 }}>
-                  <div style={{ display: "block", marginBottom: 6 }}>
-                    Level:{" "}
+                  <div style={{ display: 'block', marginBottom: 6 }}>
+                    Level:{' '}
                     <strong style={{ marginLeft: 8 }}>
                       {LEVELS.find((l) => l.id === selectedLevelId)?.name}
                     </strong>
@@ -1953,7 +1863,7 @@ export default function App() {
                   {/* level selection is handled on the LevelSelect page; keep name display only */}
                 </div>
 
-                {scene === "play" ? (
+                {scene === 'play' ? (
                   <div>
                     <p style={{ marginTop: 8, opacity: 0.8 }}>
                       Controls: Arrows = move • Z/Space = swap • X = raise
@@ -1971,30 +1881,30 @@ export default function App() {
             )}
 
             {/* Mobile title overlay: minimal UI with Start button */}
-            {isMobile && scene === "title" && (
+            {isMobile && scene === 'title' && (
               <div
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
                   gap: 12,
                 }}
               >
                 <h2 style={{ margin: 0 }}>Can't Stop the Swap</h2>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     onClick={() => {
                       // start selected level
                       startGame();
-                      setScene("play");
+                      setScene('play');
                     }}
-                    style={{ padding: "10px 18px", fontSize: 18 }}
+                    style={{ padding: '10px 18px', fontSize: 18 }}
                   >
                     Start
                   </button>
                   <button
-                    onClick={() => navigate("/")}
-                    style={{ padding: "10px 18px", fontSize: 18 }}
+                    onClick={() => navigate('/')}
+                    style={{ padding: '10px 18px', fontSize: 18 }}
                   >
                     Title
                   </button>

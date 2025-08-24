@@ -1,7 +1,7 @@
-import "./WinLine.css";
+import './WinLine.css';
 
 function cn(...parts: Array<string | undefined | false | null>) {
-  return parts.filter(Boolean).join(" ");
+  return parts.filter(Boolean).join(' ');
 }
 
 type WinLineProps = {
@@ -9,16 +9,10 @@ type WinLineProps = {
   yPx: number;
   className?: string;
   style?: React.CSSProperties;
-  "aria-label"?: string;
+  'aria-label'?: string;
 };
 
-export default function WinLine({
-  percent,
-  yPx,
-  className,
-  style,
-  ...aria
-}: WinLineProps) {
+export default function WinLine({ percent, yPx, className, style, ...aria }: WinLineProps) {
   const clamped = Math.max(0, Math.min(100, percent));
 
   // Merge incoming style prop but ensure we always include the translateY
@@ -27,20 +21,16 @@ export default function WinLine({
   // styles are preserved and transform is combined).
   const styleRecord = style as React.CSSProperties & Record<string, unknown>;
   const incomingTransform =
-    (style && typeof styleRecord.transform === "string"
-      ? styleRecord.transform
-      : "") || "";
+    (style && typeof styleRecord.transform === 'string' ? styleRecord.transform : '') || '';
   const translate = `translateY(${yPx}px)`;
   const mergedStyle: React.CSSProperties = {
     ...(style || {}),
-    transform: `${
-      incomingTransform ? incomingTransform + " " : ""
-    }${translate}`,
+    transform: `${incomingTransform ? incomingTransform + ' ' : ''}${translate}`,
   };
 
   return (
     <div
-      className={cn("winline", className)}
+      className={cn('winline', className)}
       style={mergedStyle}
       role="progressbar"
       aria-valuemin={0}

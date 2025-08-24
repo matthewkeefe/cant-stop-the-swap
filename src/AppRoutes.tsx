@@ -1,11 +1,11 @@
-import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
-import TitlePage from "./pages/TitlePage";
-import ScorePage from "./pages/ScorePage";
-import OptionsPage from "./pages/OptionsPage";
-import LevelSelectPage from "./pages/LevelSelectPage";
-import App from "./App";
-import CongratulationsPage from "./pages/CongratulationsPage";
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import TitlePage from './pages/TitlePage';
+import ScorePage from './pages/ScorePage';
+import OptionsPage from './pages/OptionsPage';
+import LevelSelectPage from './pages/LevelSelectPage';
+import App from './App';
+import CongratulationsPage from './pages/CongratulationsPage';
 
 const AppRoutes: React.FC = () => {
   return (

@@ -11,13 +11,13 @@ export type Mask = {
 
 export async function buildMaskFromImage(url: string): Promise<Mask> {
   const img = new Image();
-  img.crossOrigin = "anonymous";
+  img.crossOrigin = 'anonymous';
   img.src = url;
   await img.decode();
-  const cvs = document.createElement("canvas");
+  const cvs = document.createElement('canvas');
   cvs.width = img.naturalWidth;
   cvs.height = img.naturalHeight;
-  const ctx = cvs.getContext("2d")!;
+  const ctx = cvs.getContext('2d')!;
   ctx.drawImage(img, 0, 0);
   const data = ctx.getImageData(0, 0, cvs.width, cvs.height).data;
   const colTop = new Int32Array(cvs.width);
@@ -40,11 +40,7 @@ export async function buildMaskFromImage(url: string): Promise<Mask> {
 // cellLeftX and cellRightX are pixel coordinates in the mask image space.
 // samples: array of sample X positions (pixels) within the cell; masked if any
 // sample top is <= mask top bound (i.e., cell top crosses into mask)
-export function cellTouchesMask(
-  mask: Mask,
-  cellTopY: number,
-  sampleXs: number[]
-): boolean {
+export function cellTouchesMask(mask: Mask, cellTopY: number, sampleXs: number[]): boolean {
   if (!mask) return false;
   for (const sx of sampleXs) {
     const ix = Math.floor(sx);

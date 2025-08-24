@@ -53,7 +53,7 @@
 }
 
 .grid-container::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   background: var(--grid-bg-tint);
@@ -67,8 +67,13 @@
   z-index: 2; /* above canvas but below overlays */
   opacity: var(--grid-pattern-opacity, 0.06);
   /* clearer repeating diagonal lines */
-  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 48px);
-  background-size: calc(48px * var(--grid-pattern-scale, 1)) calc(48px * var(--grid-pattern-scale, 1));
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.03) 0 2px,
+    transparent 2px 48px
+  );
+  background-size: calc(48px * var(--grid-pattern-scale, 1))
+    calc(48px * var(--grid-pattern-scale, 1));
 }
 
 .grid-container .canvas-wrapper {

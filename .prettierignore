@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+.vite
+*.log
+*.png
+*.jpg
+*.svg
+*.mp3
+*.ogg
+public/assets/
+src/assets/
+**/*.lock

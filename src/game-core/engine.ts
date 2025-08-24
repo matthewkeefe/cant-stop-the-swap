@@ -1,5 +1,5 @@
 export type Cell = number;
-export type Phase = "idle" | "clearing" | "settling";
+export type Phase = 'idle' | 'clearing' | 'settling';
 
 export type FallPiece = {
   x: number;
@@ -51,8 +51,8 @@ export type GameState = {
   nextRowPreview?: number[];
 };
 
-import type { Mask } from "../mask";
-import { cellTouchesMask } from "../mask";
+import type { Mask } from '../mask';
+import { cellTouchesMask } from '../mask';
 
 export class Engine {
   width: number;
@@ -62,7 +62,7 @@ export class Engine {
   grid: Cell[][];
   cursorX = 0;
   cursorY = 0;
-  phase: Phase = "idle";
+  phase: Phase = 'idle';
   matchMask: boolean[][];
   mask?: Mask;
   clearTimerMs = 0;
@@ -128,13 +128,8 @@ export class Engine {
     this.width = width;
     this.height = height;
     this.cellSize = 64; // default to 64px tiles
-    this.colors = ["#e63946", "#2a9d8f", "#457b9d", "#f4a261", "#a29bfe"].slice(
-      0,
-      numColors
-    );
-    this.grid = Array.from({ length: height }, () =>
-      Array.from({ length: width }, () => -1)
-    );
+    this.colors = ['#e63946', '#2a9d8f', '#457b9d', '#f4a261', '#a29bfe'].slice(0, numColors);
+    this.grid = Array.from({ length: height }, () => Array.from({ length: width }, () => -1));
     this.matchMask = this.blankMask();
     this.clearLineY = Math.floor(this.height * 0.5);
     // Start cursor in the middle of the board
@@ -164,9 +159,7 @@ export class Engine {
     // horizontal or vertical triples when they arrive.
     const simulatedGrid = this.grid.map((r) => r.slice());
     const normalizedRows: number[][] = rows.map((r) =>
-      Array.from({ length: this.width }, (_, i) =>
-        r[i] !== undefined ? r[i] : -1
-      )
+      Array.from({ length: this.width }, (_, i) => (r[i] !== undefined ? r[i] : -1)),
     );
 
     const sanitizedQueue: number[][] = [];
@@ -175,8 +168,7 @@ export class Engine {
       sanitizedQueue.push(sanitized.slice());
       // Simulate shifting the grid up and inserting the sanitized row so
       // subsequent queued rows are sanitized with correct vertical context.
-      for (let y = 0; y < this.height - 1; y++)
-        simulatedGrid[y] = simulatedGrid[y + 1].slice();
+      for (let y = 0; y < this.height - 1; y++) simulatedGrid[y] = simulatedGrid[y + 1].slice();
       simulatedGrid[this.height - 1] = sanitized.slice();
     }
 
@@ -185,7 +177,7 @@ export class Engine {
 
     // Prepare visible grid and populate bottom-up with up to `want` rows
     const temp: number[][] = Array.from({ length: this.height }, () =>
-      Array.from({ length: this.width }, () => -1)
+      Array.from({ length: this.width }, () => -1),
     );
     let placed = 0;
     for (let y = this.height - 1; y >= 0 && placed < want; y--) {
@@ -215,7 +207,7 @@ export class Engine {
    * matches when inserted at the bottom. This removes horizontal triples
    * within the row itself and avoids vertical triples with the two rows
    * that will be directly above the inserted row (current bottom rows).
-   * 
+   *
    * This method ensures that no three consecutive cells in the row have the same color
    * (horizontal triple), and that no cell creates a vertical triple with the two cells
    * above it in the grid context. If a triple is detected, the offending cell is replaced
@@ -225,15 +217,10 @@ export class Engine {
    * @param gridContext - The current grid context, used to check for vertical triples. Defaults to the engine's grid.
    * @returns A sanitized array of color indices for the row, with no horizontal or vertical triples.
    */
-  private sanitizeRow(
-    row: number[],
-    gridContext: Cell[][] = this.grid
-  ): number[] {
+  private sanitizeRow(row: number[], gridContext: Cell[][] = this.grid): number[] {
     const w = this.width;
     const numColors = this.colors.length;
-    const out = Array.from({ length: w }, (_, i) =>
-      row[i] !== undefined ? row[i] : -1
-    );
+    const out = Array.from({ length: w }, (_, i) => (row[i] !== undefined ? row[i] : -1));
 
     // Helper: pick a color not in the forbidden set
     const pickAlt = (forbidden: Set<number>) => {
@@ -264,8 +251,7 @@ export class Engine {
       if (top1 >= 0 && top2 >= 0 && top1 === top2 && out[x] === top1) {
         const forbidden = new Set<number>([top1]);
         // Also avoid making horizontal triple by matching neighbors
-        if (x >= 1 && out[x - 1] >= 0 && out[x - 1] === out[x - 2])
-          forbidden.add(out[x - 1]);
+        if (x >= 1 && out[x - 1] >= 0 && out[x - 1] === out[x - 2]) forbidden.add(out[x - 1]);
         out[x] = pickAlt(forbidden);
       }
     }
@@ -284,9 +270,7 @@ export class Engine {
           color = this.randColorIndex();
           tries++;
         } while (
-          (x >= 2 &&
-            color === this.grid[y][x - 1] &&
-            color === this.grid[y][x - 2]) ||
+          (x >= 2 && color === this.grid[y][x - 1] && color === this.grid[y][x - 2]) ||
           (y <= this.height - 3 &&
             color === this.grid[y + 1][x] &&
             color === this.grid[y + 2][x] &&
@@ -299,7 +283,7 @@ export class Engine {
 
   private blankMask(): boolean[][] {
     return Array.from({ length: this.height }, () =>
-      Array.from({ length: this.width }, () => false)
+      Array.from({ length: this.width }, () => false),
     );
   }
 
@@ -346,7 +330,7 @@ export class Engine {
   }
 
   swap() {
-    if (this.phase !== "idle" || this.hasWon || this.hasLost) return;
+    if (this.phase !== 'idle' || this.hasWon || this.hasLost) return;
     const x = this.cursorX;
     const y = this.cursorY;
     const a = this.grid[y][x];
@@ -362,7 +346,7 @@ export class Engine {
 
     const anyMatches = this.scanForMatches();
     if (anyMatches) {
-      this.phase = "clearing";
+      this.phase = 'clearing';
       this.clearTimerMs = 230;
       this.chainCount = Math.max(this.chainCount, 1);
       return;
@@ -403,11 +387,7 @@ export class Engine {
     // SCROLLING: advance fractional pixel scroll first
     // Only perform automatic scrolling when idle, scrolling speed > 0, and
     // not currently paused by a match countdown.
-    if (
-      this.phase === "idle" &&
-      this.scrollSpeedPxPerSec > 0 &&
-      this.risePauseMs <= 0
-    ) {
+    if (this.phase === 'idle' && this.scrollSpeedPxPerSec > 0 && this.risePauseMs <= 0) {
       this.scrollOffsetPx += (this.scrollSpeedPxPerSec * dtMs) / 1000;
       const cellPx = this.cellSize;
       // Consume as many full rows as needed (handle large dtMs)
@@ -439,7 +419,7 @@ export class Engine {
       }
     }
 
-    if (this.phase === "clearing") {
+    if (this.phase === 'clearing') {
       this.clearTimerMs -= dtMs;
       if (this.clearTimerMs <= 0) {
         const { tilesCleared, clearedBelowLine } = this.applyClearAndCount();
@@ -483,9 +463,7 @@ export class Engine {
                   const speed = 160 + Math.random() * 200; // px/sec
                   const vx = Math.cos(angle) * speed;
                   const vy = -120 - Math.random() * 420; // upward bias
-                  const color = `hsl(${Math.floor(
-                    Math.random() * 360
-                  )},90%,60%)`;
+                  const color = `hsl(${Math.floor(Math.random() * 360)},90%,60%)`;
                   const size = 2 + Math.random() * 3;
                   this.particles.push({
                     x: cx,
@@ -507,7 +485,7 @@ export class Engine {
       return;
     }
 
-    if (this.phase === "settling") {
+    if (this.phase === 'settling') {
       if (this.fallPieces.length > 0) {
         let allLanded = true;
         // Update each piece with its own speed (if provided) so cascade pieces
@@ -526,11 +504,11 @@ export class Engine {
 
       const cascades = this.scanForMatches();
       if (cascades) {
-        this.phase = "clearing";
+        this.phase = 'clearing';
         this.clearTimerMs = 200;
         this.chainCount += 1;
       } else {
-        this.phase = "idle";
+        this.phase = 'idle';
         this.chainCount = 0;
         // WIN CHECK: after cascades settled, if the on-screen win line has
         // risen into view (rowsInserted >= totalLevelLines) and no occupied
@@ -544,9 +522,7 @@ export class Engine {
           // check matches the on-screen line position. The win line starts
           // below the canvas until enough rows have been inserted.
           const winLineScreenY =
-            canvasH +
-            (this.totalLevelLines - this.rowsInserted) * cellPx -
-            this.scrollOffsetPx;
+            canvasH + (this.totalLevelLines - this.rowsInserted) * cellPx - this.scrollOffsetPx;
           let anyAbove = false;
           for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
@@ -574,8 +550,8 @@ export class Engine {
       }
       return;
     }
-  // Expose scroll offset in state for renderer
-  // (no-op here; getState will include scrollOffsetPx)
+    // Expose scroll offset in state for renderer
+    // (no-op here; getState will include scrollOffsetPx)
   }
 
   // Insert row using prebuilt queue (or empty) - shifts grid up by one row
@@ -601,8 +577,7 @@ export class Engine {
     // Ensure length
     if (newRow.length !== this.width) {
       const r = Array.from({ length: this.width }, () => -1);
-      for (let i = 0; i < Math.min(newRow.length, this.width); i++)
-        r[i] = newRow[i];
+      for (let i = 0; i < Math.min(newRow.length, this.width); i++) r[i] = newRow[i];
       this.grid[this.height - 1] = r;
     } else {
       this.grid[this.height - 1] = newRow.slice();
@@ -737,7 +712,7 @@ export class Engine {
           // the chain. StartSettlingAnimation is called from both swap()
           // and after clearing; use the engine phase to decide multiplier.
           const speed =
-            this.phase === "clearing"
+            this.phase === 'clearing'
               ? this.fallSpeedRowsPerSec * this.cascadeFallSpeedMultiplier
               : this.fallSpeedRowsPerSec;
           this.fallPieces.push({
@@ -753,7 +728,7 @@ export class Engine {
       }
       // Do NOT clear all cells above the last gem; leave them as-is
     }
-    this.phase = "settling";
+    this.phase = 'settling';
   }
 
   /**
@@ -805,7 +780,7 @@ export class Engine {
       riseAccumRows: this.riseAccumRows,
       risePauseMs: this.risePauseMs,
       risePauseMaxMs: this.risePauseMaxMs,
-  clearLineY: this.clearLineY,
+      clearLineY: this.clearLineY,
       hasWon: this.hasWon,
       hasLost: this.hasLost,
       scrollOffsetPx: this.scrollOffsetPx,

@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { Engine } from "../src/game-core/engine";
+import { describe, it, expect } from 'vitest';
+import { Engine } from '../src/game-core/engine';
 
-describe("Engine start/reset behavior", () => {
-  it("setLevelQueue populates visible rows and rowsInserted resets on new engine", () => {
+describe('Engine start/reset behavior', () => {
+  it('setLevelQueue populates visible rows and rowsInserted resets on new engine', () => {
     const e = new Engine(6, 6, 4);
     const rows = [
       [0, 0, 0, -1, -1, -1],
@@ -16,7 +16,7 @@ describe("Engine start/reset behavior", () => {
     const bottom = e.grid[e.height - 1];
     expect(bottom.length).toBe(e.width);
     for (const v of bottom) {
-      expect(typeof v === "number").toBeTruthy();
+      expect(typeof v === 'number').toBeTruthy();
       expect(v === -1 || (v >= 0 && v < e.colors.length)).toBeTruthy();
     }
 

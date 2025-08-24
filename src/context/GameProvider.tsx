@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from "react";
-import { GameContext } from "./GameContext";
+import React, { useMemo, useRef, useState } from 'react';
+import { GameContext } from './GameContext';
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [paused, setPaused] = useState(false);
@@ -13,10 +13,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const value = useMemo(
-    () => ({ paused, togglePause }),
-    [paused]
-  );
+  const value = useMemo(() => ({ paused, togglePause }), [paused]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 };
