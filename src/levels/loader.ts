@@ -10,40 +10,50 @@ const rawLevels = raw as RawLevel[];
 
 // Build-time asset map using Vite's globEager with ?url so values are URL strings.
 const assetMap: Record<string, string> = {};
-const metaWithGlob = import.meta as unknown as {
-  globEager?: (pattern: string) => Record<string, unknown>;
-};
-// Request URLs directly
-const files = metaWithGlob.globEager?.("../assets/**/*?url") ?? {};
-for (const key in files) {
-  const v = files[key];
-  let url: string | null = null;
-  if (typeof v === "string") url = v;
-  else if (v && typeof v === "object") {
-    const obj = v as Record<string, unknown>;
-    const def = obj["default"];
-    if (typeof def === "string") url = def;
-  }
-
+// Use Vite's import.meta.glob with eager/as:'url' so all assets are bundled and we get URL strings.
+// Provide a narrow type for glob to avoid using `any` which the linter flags.
+type ViteGlobFn = (
+  pattern: string,
+  opts?: { eager?: boolean; as?: 'url' | 'raw' | 'default' | 'document' | 'webassembly' }
+) => Record<string, string>;
+const metaWithGlob = import.meta as unknown as { glob?: ViteGlobFn };
+const globFiles = metaWithGlob.glob?.("../assets/**/*", { eager: true, as: "url" }) ?? {};
+for (const key in globFiles) {
+  const url = globFiles[key] as string | undefined;
+  if (!url) continue;
   // Normalize key to forward slashes so Windows backslashes won't break lookups
   const keyPosix = key.replace(/\\/g, "/");
-  // Strip query part if present and normalize leading ../
-  const strippedKey = keyPosix.replace(/\?url$/, "");
-  const normalizedKey = strippedKey.replace(/^\.\.\//, "../");
-  if (url) {
-    assetMap[normalizedKey] = url;
-    // Also store without the leading '../' so lookups of 'assets/...' succeed
-    assetMap[normalizedKey.replace(/^\.\.\//, "")] = url;
-    // Also index by basename (e.g. 'desert.png') so JSON paths that include only filename match
-    const parts = normalizedKey.split("/");
-    const basename = parts[parts.length - 1];
-    if (basename) assetMap[basename] = url;
-  }
+  // Ensure key has a leading ../ to match JSON paths like '../assets/...'
+  const normalizedKey = keyPosix.replace(/^\.\/?/, "../");
+  assetMap[normalizedKey] = url;
+  // Also store without the leading '../' so lookups of 'assets/...' succeed
+  assetMap[normalizedKey.replace(/^\.\./, "")] = url;
+  // Also index by basename (e.g. 'desert.png') so JSON paths that include only filename match
+  const parts = normalizedKey.split("/");
+  const basename = parts[parts.length - 1];
+  if (basename) assetMap[basename] = url;
 }
 
 function resolveAsset(path: string | null) {
   if (!path) return null;
-  // Normalize path variants to match keys in assetMap
+  // Prefer public-style relative paths (e.g. 'assets/background/foo.png') so
+  // GH Pages will resolve them relative to the repo root (e.g. '/<repo>/assets/...').
+  try {
+    const cleaned = path.replace(/^\.\/?/, ""); // remove './' or '../' prefix
+    if (cleaned.startsWith("assets/")) {
+      // If the bundler produced a mapped URL for the asset, prefer that.
+      const mapped = assetMap[cleaned] || assetMap[`../${cleaned}`] || assetMap[cleaned.replace(/^assets\//, "")];
+      if (mapped) return mapped;
+      // Otherwise return the relative public path which will point to the public copy
+      // deployed at '/<repo>/assets/...'. Do not add a leading slash so it remains
+      // relative to the current repo path on GitHub Pages.
+      return cleaned;
+    }
+  } catch {
+    // ignore and fall back to the generic resolver below
+  }
+
+  // Normalize other path variants to match keys in assetMap
   const variants = new Set<string>();
   const add = (p: string) => variants.add(p);
   add(path);
