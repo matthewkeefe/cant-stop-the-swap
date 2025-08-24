@@ -330,19 +330,42 @@ export class Engine {
   }
 
   swap() {
+    return this.swapAt(this.cursorX, this.cursorY);
+  }
+
+  /**
+   * Swap the pair at the specified left cell (x, y) with its right neighbor.
+   * Clamps x/y to valid ranges. This centralizes swap logic so callers can
+   * request a swap at any cell (useful for touch where taps target a cell).
+   */
+  swapAt(xIn: number, yIn: number) {
+    const x = Math.max(0, Math.min(this.width - 2, xIn | 0));
+    const y = Math.max(0, Math.min(this.height - 1, yIn | 0));
+    // Debug: log swap attempt and why it may be ignored
+    try {
+      console.debug('[Engine] swapAt called', { x, y, phase: this.phase, hasWon: this.hasWon, hasLost: this.hasLost });
+    } catch {
+      /* ignore */
+    }
     if (this.phase !== 'idle' || this.hasWon || this.hasLost) return;
-    const x = this.cursorX;
-    const y = this.cursorY;
+
     const a = this.grid[y][x];
     const b = this.grid[y][x + 1];
-
     if (a < 0 && b < 0) return;
 
     this.grid[y][x] = b;
     this.grid[y][x + 1] = a;
 
-    // Notify listeners that a swap occurred
-    if (this.onSwap) this.onSwap();
+    try {
+      if (this.onSwap) this.onSwap();
+    } catch (e) {
+      console.debug('[Engine] onSwap handler error', e);
+    }
+    try {
+      console.debug('[Engine] swap performed', { x, y, a, b });
+    } catch {
+      /* ignore */
+    }
 
     const anyMatches = this.scanForMatches();
     if (anyMatches) {

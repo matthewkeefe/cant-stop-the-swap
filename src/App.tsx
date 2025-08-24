@@ -312,23 +312,36 @@ export default function App() {
 
   // Auto-start once on mount if this component is used for the /play route.
   useEffect(() => {
-    // If on desktop auto-start the game. On mobile, prefer the title page so
-    // the screen stays uncluttered and the player can tap Start explicitly.
-    if (!isMobile) {
-      if (scene === 'play' && !engineRef.current) {
-        // If navigation provided a startLevelId, use it; otherwise start default
-        const navState = (location as unknown as { state?: { startLevelId?: string } })?.state;
-        const startLevelId = navState?.startLevelId;
-        if (startLevelId) startGame(startLevelId);
-        else startGame();
-      }
-    } else {
-      // Ensure mobile viewers start on the title page
-      if (scene !== 'title') setScene('title');
+    // Auto-start: when mounted for /play, start the level immediately (mobile and desktop).
+    if (scene === 'play' && !engineRef.current) {
+      const navState = (location as unknown as { state?: { startLevelId?: string } })?.state;
+      const startLevelId = navState?.startLevelId;
+      if (startLevelId) startGame(startLevelId);
+      else startGame();
     }
     // run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Also auto-start when navigation brings us to /play with a startLevelId
+  // (covers client-side Title -> Play navigation when App is already mounted).
+  useEffect(() => {
+    try {
+      const path = location.pathname || '';
+      if (!path.startsWith('/play')) return;
+      const navState = (location as unknown as { state?: { startLevelId?: string } })?.state;
+      const startLevelId = navState?.startLevelId;
+      // If engine already running, do nothing
+      if (engineRef.current) return;
+  // Auto-start regardless of device when navigating to /play
+  if (startLevelId) startGame(startLevelId);
+  else startGame();
+    } catch {
+      /* ignore */
+    }
+    // Intentionally run when pathname or isMobile changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key, location.pathname, isMobile]);
 
   // Centralized input handling (keyboard + touch)
   useGameInput({
@@ -369,6 +382,31 @@ export default function App() {
     xPrevRateRef,
   baseRaiseRateRef,
   });
+
+  // Small diagnostic overlay to show last pointer/tap info when enabled.
+  // Toggle by setting `window.__CSTS_DEBUG_SHOW = true` in the browser console.
+  const DebugOverlay = () => {
+    try {
+      // only render if explicitly enabled
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (!(window as any).__CSTS_DEBUG_SHOW) return null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const d = (window as any).__CSTS_DEBUG || {};
+      const last = d.lastPointer;
+      if (!last) return null;
+      return (
+        <div style={{ position: 'fixed', left: 8, top: 8, zIndex: 9999, background: 'rgba(0,0,0,0.6)', color: 'white', padding: 8, fontSize: 12, borderRadius: 6 }}>
+          <div>Last: {last.type}</div>
+          <div>cell: {last.cellX ?? '-'} / {last.cellY ?? '-'}</div>
+          <div>moved: {String(last.moved ?? false)}</div>
+          <div>dur: {last.duration ?? '-'}</div>
+          <div>phase: {last.phase ?? '-'}</div>
+        </div>
+      );
+    } catch {
+      return null;
+    }
+  };
 
   // Keep isMobile updated on resize / orientation change
   useEffect(() => {
@@ -419,8 +457,66 @@ export default function App() {
   // Main game and input handling loop
   useEffect(() => {
     const canvas = canvasRef.current!;
-    canvas.width = WIDTH * CELL;
-    canvas.height = HEIGHT * CELL;
+    // Typed alias so we can attach small runtime bookkeeping fields without `any`.
+    const canvasWithMeta = canvas as HTMLCanvasElement & {
+      _devicePixelRatio?: number;
+      _cssCellSize?: number;
+    };
+
+    // Responsive canvas sizing: compute CSS size that fits the viewport
+    // while respecting the configured board logical size (WIDTH * CELL).
+    const computeAndApplySize = () => {
+      try {
+        const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+        // CSS width should not exceed the logical board width; allow up to 90vw
+        const maxCssWidth = Math.min(WIDTH * CELL, Math.floor(window.innerWidth * 0.9));
+        const cssWidth = Math.max(64, maxCssWidth); // enforce a sensible minimum
+        const scale = cssWidth / (WIDTH * CELL);
+        const cssCellSize = CELL * scale; // cell size in CSS pixels
+
+        const cssHeight = Math.round(HEIGHT * cssCellSize);
+        const backingWidth = Math.round(cssWidth * dpr);
+        const backingHeight = Math.round(cssHeight * dpr);
+
+        // Apply CSS size for layout and high-DPI backing resolution for crispness
+        canvas.style.width = `${cssWidth}px`;
+        canvas.style.height = `${cssHeight}px`;
+        canvas.width = backingWidth;
+        canvas.height = backingHeight;
+
+        // store current DPR and cell CSS size for rendering
+  canvasWithMeta._devicePixelRatio = dpr;
+  canvasWithMeta._cssCellSize = cssCellSize;
+
+        // If engine exists, set its cellSize to CSS pixels so logic that uses
+        // engine.cellSize (e.g., scroll speed) remains in CSS coordinate space.
+        if (engineRef.current) {
+          engineRef.current.cellSize = cssCellSize;
+          // Recompute scroll speed if a base raise rate is present
+          try {
+            if (baseRaiseRateRef.current) {
+              engineRef.current.scrollSpeedPxPerSec = baseRaiseRateRef.current * engineRef.current.cellSize;
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      } catch {
+        // fallback to fixed sizing
+        canvas.width = WIDTH * CELL;
+        canvas.height = HEIGHT * CELL;
+        canvas.style.width = `${WIDTH * CELL}px`;
+        canvas.style.height = `${HEIGHT * CELL}px`;
+  canvasWithMeta._devicePixelRatio = 1;
+  canvasWithMeta._cssCellSize = CELL;
+      }
+    };
+
+    // Initial sizing and on resize/orientation change
+    computeAndApplySize();
+    const onResize = () => computeAndApplySize();
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
 
   // input handlers moved to useGameInput hook
     // Auto-pause when the tab/window loses focus
@@ -478,7 +574,7 @@ export default function App() {
     window.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('blur', onWindowBlur);
 
-    let raf = 0;
+  let raf = 0;
     let last = performance.now();
     const ctx = canvas.getContext('2d')!;
 
@@ -488,9 +584,9 @@ export default function App() {
       const dt = now - last;
       last = now;
 
-      if (scene === 'play' && engineRef.current) {
-        engineRef.current.update(dt);
-        const s = engineRef.current.getState();
+  if (scene === 'play' && engineRef.current) {
+  engineRef.current.update(dt);
+  const s = engineRef.current.getState();
 
         // Skins (background + foreground) when atlases are ready —
         // use the extracted helpers in src/lib/graphics.ts
@@ -510,9 +606,18 @@ export default function App() {
         ) {
           engineRef.current.setCursorAbsolute(lastCursorRef.current.x, lastCursorRef.current.y);
           const s2 = engineRef.current.getState();
-          drawStateToCanvas(ctx, s2, CELL, dt, s2.scrollOffsetPx ?? 0, bgSkin, fgSkin);
+          // Use canvas backing units: cell size in canvas pixels = cssCellSize * dpr
+          const dpr = canvasWithMeta._devicePixelRatio || 1;
+          const cssCell = canvasWithMeta._cssCellSize || CELL;
+          const canvasCellSize = cssCell * dpr;
+          const scrollPx = (s2.scrollOffsetPx ?? 0) * dpr;
+          drawStateToCanvas(ctx, s2, canvasCellSize, dt, scrollPx, bgSkin, fgSkin);
         } else {
-          drawStateToCanvas(ctx, s, CELL, dt, s.scrollOffsetPx ?? 0, bgSkin, fgSkin);
+          const dpr = canvasWithMeta._devicePixelRatio || 1;
+          const cssCell = canvasWithMeta._cssCellSize || CELL;
+          const canvasCellSize = cssCell * dpr;
+          const scrollPx = (s.scrollOffsetPx ?? 0) * dpr;
+          drawStateToCanvas(ctx, s, canvasCellSize, dt, scrollPx, bgSkin, fgSkin);
         }
 
         lastCursorRef.current = { x: s.cursorX, y: s.cursorY };
@@ -569,11 +674,13 @@ export default function App() {
           const overlay = cursorOverlayRef.current;
           if (overlay) {
             const childId = 'dom-cursor-box';
-            const cx = s.cursorX * CELL + 1.5;
-            const cy = s.cursorY * CELL - (s.scrollOffsetPx ?? 0) + 1.5;
-            const w = CELL * 2 - 3;
-            const h = CELL - 3;
-            const radius = Math.min(10, Math.max(4, Math.floor(CELL * 0.12)));
+                // Cursor overlay works in CSS pixels; use cssCell size for positioning
+                const cssCell = canvasWithMeta._cssCellSize || CELL;
+                const cx = s.cursorX * cssCell + 1.5;
+                const cy = s.cursorY * cssCell - (s.scrollOffsetPx ?? 0) + 1.5;
+                const w = cssCell * 2 - 3;
+                const h = cssCell - 3;
+                const radius = Math.min(10, Math.max(4, Math.floor(cssCell * 0.12)));
             updateCursorOverlay(overlay, childId, cx, cy, w, h, radius);
           }
         } catch {
@@ -593,7 +700,9 @@ export default function App() {
     return () => {
       window.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onWindowBlur);
-      cancelAnimationFrame(raf);
+  cancelAnimationFrame(raf);
+  window.removeEventListener('resize', onResize);
+  window.removeEventListener('orientationchange', onResize);
     };
     // startGame and togglePause are stable, so we can safely ignore them for this effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -904,6 +1013,8 @@ export default function App() {
           height: '100%',
         }}
       >
+  {/* Debug overlay - toggle by setting window.__CSTS_DEBUG_SHOW = true in dev console */}
+  <DebugOverlay />
         <div
           style={{
             display: 'grid',
@@ -917,8 +1028,9 @@ export default function App() {
               gridTemplateColumns: '1fr 1fr',
               gap: 16,
               alignItems: 'start',
-              width: WIDTH * CELL + 280,
-              maxWidth: '90vw',
+              // Responsive container: don't exceed viewport on small devices
+              width: `min(${WIDTH * CELL + 280}px, 90vw)`,
+              maxWidth: '100%',
             }}
           >
             <div>
@@ -1054,6 +1166,7 @@ export default function App() {
                   }}
                 />
                 {/* Title button at top-right of the board */}
+                {!isMobile && (
                 <button
                   onMouseEnter={() => setTitleHover(true)}
                   onMouseLeave={() => setTitleHover(false)}
@@ -1105,7 +1218,9 @@ export default function App() {
                 >
                   Title
                 </button>
+                )}
                 {/* Options button, same style as Title, sits to the left of it */}
+                {!isMobile && (
                 <button
                   onMouseEnter={() => setOptionsHover(true)}
                   onMouseLeave={() => setOptionsHover(false)}
@@ -1158,7 +1273,9 @@ export default function App() {
                 >
                   Options
                 </button>
+                )}
                 {/* Levels button between Options and Title */}
+                {!isMobile && (
                 <button
                   onMouseEnter={() => setLevelsHover(true)}
                   onMouseLeave={() => setLevelsHover(false)}
@@ -1211,7 +1328,8 @@ export default function App() {
                 >
                   Levels
                 </button>
-                {scene === 'play' && !isMobile && (hud.hasWon || hud.hasLost) && (
+                )}
+                {scene === 'play' && (hud.hasWon || hud.hasLost) && (
                   <div
                     style={{
                       position: 'absolute',
@@ -1396,10 +1514,12 @@ export default function App() {
                   </button>
                 )}
               </div>
-              {/* Footer under the canvas for play page */}
-              <div style={{ marginTop: 12 }}>
-                <Footer />
-              </div>
+              {/* Footer under the canvas for play page - hide on mobile play for a pure-canvas view */}
+              {!(isMobile && scene === 'play') && (
+                <div style={{ marginTop: 12 }}>
+                  <Footer />
+                </div>
+              )}
             </div>
 
             {/* Right HUD: hide on mobile for a minimal experience */}
@@ -1469,37 +1589,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Mobile title overlay: minimal UI with Start button */}
-            {isMobile && scene === 'title' && (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 12,
-                }}
-              >
-                <h2 style={{ margin: 0 }}>Can't Stop the Swap</h2>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => {
-                      // start selected level
-                      startGame();
-                      setScene('play');
-                    }}
-                    style={{ padding: '10px 18px', fontSize: 18 }}
-                  >
-                    Start
-                  </button>
-                  <button
-                    onClick={() => navigate('/')}
-                    style={{ padding: '10px 18px', fontSize: 18 }}
-                  >
-                    Title
-                  </button>
-                </div>
-              </div>
-            )}
+            {/* Mobile title overlay removed: on mobile, /play auto-starts and only the canvas is shown */}
           </div>
         </div>
       </div>
