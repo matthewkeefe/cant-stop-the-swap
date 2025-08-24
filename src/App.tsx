@@ -80,7 +80,10 @@ export default function App() {
   // If the user selected a level via the LevelSelectPage, prefer that
   useEffect(() => {
     try {
-      const stored = typeof window !== "undefined" ? localStorage.getItem("selectedLevelId") : null;
+      const stored =
+        typeof window !== "undefined"
+          ? localStorage.getItem("selectedLevelId")
+          : null;
       if (stored) setSelectedLevelId(stored);
     } catch {
       // ignore storage errors
@@ -128,17 +131,37 @@ export default function App() {
     risePauseMs: 0,
     risePauseMaxMs: 0,
   });
+  // Scores for the current playthrough: array of { levelId, score }
+  const [playthroughScores, setPlaythroughScores] = useState<
+    { levelId: string; score: number }[]
+  >(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const raw = sessionStorage.getItem("currentPlaythrough");
+        return raw
+          ? (JSON.parse(raw) as { levelId: string; score: number }[])
+          : [];
+      }
+    } catch {
+      /* ignore */
+    }
+    return [];
+  });
   const [winLine, setWinLine] = useState({ percent: 0, yPx: -9999 });
   const [titleHover, setTitleHover] = useState(false);
   const [optionsHover, setOptionsHover] = useState(false);
   const [levelsHover, setLevelsHover] = useState(false);
   // Volume settings (persisted to localStorage)
   const [musicVolume, setMusicVolume] = useState<number>(() => {
-    const v = typeof window !== "undefined" ? localStorage.getItem("musicVolume") : null;
+    const v =
+      typeof window !== "undefined"
+        ? localStorage.getItem("musicVolume")
+        : null;
     return v !== null ? Math.max(0, Math.min(1, Number(v))) : 0.25;
   });
   const [sfxVolume, setSfxVolume] = useState<number>(() => {
-    const v = typeof window !== "undefined" ? localStorage.getItem("sfxVolume") : null;
+    const v =
+      typeof window !== "undefined" ? localStorage.getItem("sfxVolume") : null;
     return v !== null ? Math.max(0, Math.min(1, Number(v))) : 1.0;
   });
 
@@ -159,10 +182,14 @@ export default function App() {
     // Also listen for same-tab volume update events dispatched by OptionsPage
     const onVolumeEvent = (ev: Event) => {
       try {
-        const d = (ev as CustomEvent).detail as { music?: number; sfx?: number } | undefined;
+        const d = (ev as CustomEvent).detail as
+          | { music?: number; sfx?: number }
+          | undefined;
         if (d) {
-          if (typeof d.music === "number") setMusicVolume(Math.max(0, Math.min(1, d.music)));
-          if (typeof d.sfx === "number") setSfxVolume(Math.max(0, Math.min(1, d.sfx)));
+          if (typeof d.music === "number")
+            setMusicVolume(Math.max(0, Math.min(1, d.music)));
+          if (typeof d.sfx === "number")
+            setSfxVolume(Math.max(0, Math.min(1, d.sfx)));
         }
       } catch {
         /* ignore */
@@ -236,14 +263,18 @@ export default function App() {
     selectedLevelIdRef.current = selectedLevelId;
   }, [selectedLevelId]);
 
+  const totalScore = playthroughScores.reduce((s, p) => s + (p?.score ?? 0), 0);
+
   // Auto-start once on mount if this component is used for the /play route.
   useEffect(() => {
     // If on desktop auto-start the game. On mobile, prefer the title page so
     // the screen stays uncluttered and the player can tap Start explicitly.
     if (!isMobile) {
       if (scene === "play" && !engineRef.current) {
-  // If navigation provided a startLevelId, use it; otherwise start default
-  const navState = (location as unknown as { state?: { startLevelId?: string } })?.state;
+        // If navigation provided a startLevelId, use it; otherwise start default
+        const navState = (
+          location as unknown as { state?: { startLevelId?: string } }
+        )?.state;
         const startLevelId = navState?.startLevelId;
         if (startLevelId) startGame(startLevelId);
         else startGame();
@@ -286,7 +317,10 @@ export default function App() {
 
   // Fade out current music smoothly over `durationMs` then stop and clear ref.
   const fadeOutAndStopMusic = useCallback(
-    (mRef: React.MutableRefObject<HTMLAudioElement | null>, durationMs = 300) => {
+    (
+      mRef: React.MutableRefObject<HTMLAudioElement | null>,
+      durationMs = 300
+    ) => {
       const m = mRef.current;
       if (!m) return;
       try {
@@ -335,7 +369,11 @@ export default function App() {
       if (path.startsWith("/play")) return;
 
       // If navigating to Title, Options, or Level Select, gracefully fade out music
-      if (path === "/" || path.startsWith("/options") || path.startsWith("/levels")) {
+      if (
+        path === "/" ||
+        path.startsWith("/options") ||
+        path.startsWith("/levels")
+      ) {
         if (musicRef.current) {
           try {
             fadeOutAndStopMusic(musicRef, 200);
@@ -553,24 +591,22 @@ export default function App() {
     // Auto-pause when the tab/window loses focus
     const onVisibilityChange = () => {
       if (scene === "play" && !pausedRef.current && document.hidden) {
-    // behave as if pause button was pressed
-    pausedByFocusRef.current = true;
-    togglePause();
+        // behave as if pause button was pressed
+        pausedByFocusRef.current = true;
+        togglePause();
       }
     };
 
     const onWindowBlur = () => {
       if (scene === "play" && !pausedRef.current) {
-    // behave as if pause button was pressed
-    pausedByFocusRef.current = true;
-    togglePause();
+        // behave as if pause button was pressed
+        pausedByFocusRef.current = true;
+        togglePause();
       }
     };
 
     window.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("blur", onWindowBlur);
-
-    
 
     let raf = 0;
     let last = performance.now();
@@ -724,14 +760,15 @@ export default function App() {
         const total = Math.max(1, engine.totalLevelLines || 1);
         const rows = Math.max(0, engine.rowsInserted || 0);
         const pct = Math.max(0, Math.min(100, (rows / total) * 100));
-  const rawWinY = typeof s.winLineY === "number" ? s.winLineY - 2.5 : -9999;
-  // Only clamp the lower bound so the win line can remain off-screen
-  // below the canvas when rows haven't risen far enough. Previously
-  // clamping the upper bound forced off-screen values to the bottom
-  // of the canvas which made the line appear incorrectly. Allow
-  // rawWinY > canvas height so parent `overflow: hidden` keeps it hidden.
-  const clampedWinY = Math.max(-CELL, rawWinY);
-  setWinLine({ percent: pct, yPx: clampedWinY });
+        const rawWinY =
+          typeof s.winLineY === "number" ? s.winLineY - 2.5 : -9999;
+        // Only clamp the lower bound so the win line can remain off-screen
+        // below the canvas when rows haven't risen far enough. Previously
+        // clamping the upper bound forced off-screen values to the bottom
+        // of the canvas which made the line appear incorrectly. Allow
+        // rawWinY > canvas height so parent `overflow: hidden` keeps it hidden.
+        const clampedWinY = Math.max(-CELL, rawWinY);
+        setWinLine({ percent: pct, yPx: clampedWinY });
 
         // HUD: tiles above dashed line (derived)
         let tilesAbove = 0;
@@ -804,17 +841,25 @@ export default function App() {
                       </feMerge>
                     </filter>
                   </defs>
-                  <rect x="${strokeWidth / 2}" y="${strokeWidth / 2}" rx="${radius}" ry="${radius}" width="${w - strokeWidth}" height="${h - strokeWidth}" fill="none"
+                  <rect x="${strokeWidth / 2}" y="${
+                strokeWidth / 2
+              }" rx="${radius}" ry="${radius}" width="${
+                w - strokeWidth
+              }" height="${h - strokeWidth}" fill="none"
                     stroke="url(#cursor-grad)" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashLen} ${dashGap}" filter="url(#cursor-glow)" />
                 </svg>
               `;
               overlay.insertAdjacentHTML("beforeend", svg);
-              child = overlay.querySelector<HTMLDivElement>(`#${childId}`) as unknown as HTMLDivElement;
+              child = overlay.querySelector<HTMLDivElement>(
+                `#${childId}`
+              ) as unknown as HTMLDivElement;
             }
             // position the SVG overlay to match canvas cursor
             child.style.width = `${w}px`;
             child.style.height = `${h}px`;
-            child.style.transform = `translate(${Math.round(cx)}px, ${Math.round(cy)}px)`;
+            child.style.transform = `translate(${Math.round(
+              cx
+            )}px, ${Math.round(cy)}px)`;
           }
         } catch {
           /* ignore overlay positioning errors */
@@ -879,8 +924,8 @@ export default function App() {
       }
       playingClonesRef.current = [];
     } else {
-  // Clearing focus-caused pause since this is a user-initiated resume
-  pausedByFocusRef.current = false;
+      // Clearing focus-caused pause since this is a user-initiated resume
+      pausedByFocusRef.current = false;
       // Unpause: restore previous scroll speed
       if (engineRef.current && prevScrollSpeedRef.current !== null) {
         engineRef.current.scrollSpeedPxPerSec = prevScrollSpeedRef.current;
@@ -888,12 +933,12 @@ export default function App() {
       }
       // Resume music for current level
       const lvl = LEVELS.find((l) => l.id === selectedLevelId);
-    if (lvl && lvl.music) {
+      if (lvl && lvl.music) {
         try {
           const m = new Audio(lvl.music);
           m.loop = true;
           m.preload = "auto";
-      m.volume = musicVolume;
+          m.volume = musicVolume;
           m.play().catch(() => {});
           musicRef.current = m;
         } catch {
@@ -904,14 +949,32 @@ export default function App() {
   }
 
   // Start the game with initial settings
-  function startGame(levelId?: string) {
+  function startGame(
+    levelId?: string,
+    opts?: { preservePlaythrough?: boolean }
+  ) {
+    const preserve = opts?.preservePlaythrough ?? false;
+    // If we're starting a fresh playthrough (not preserving), reset stored scores
+    if (!preserve) {
+      try {
+        setPlaythroughScores([]);
+        if (typeof window !== "undefined")
+          sessionStorage.removeItem("currentPlaythrough");
+      } catch {
+        /* ignore */
+      }
+    }
     // Stop previous music when starting/restarting (fade out)
     if (musicRef.current) fadeOutAndStopMusic(musicRef, 200);
 
     // Determine effective level and inputs (prefer explicit levelId when provided)
     const effectiveLevelId = levelId ?? selectedLevelId;
     const lvlForStart = LEVELS.find((l) => l.id === effectiveLevelId);
-    type EffectiveInputs = { targetLines: number; startingLines: number; rate: number };
+    type EffectiveInputs = {
+      targetLines: number;
+      startingLines: number;
+      rate: number;
+    };
 
     const effectiveInputs: EffectiveInputs = lvlForStart
       ? {
@@ -959,12 +1022,16 @@ export default function App() {
         } else {
           idx = 4;
         }
-  if (pausedRef.current) return;
-  const audio = sounds[idx] as HTMLAudioElement;
-  const clone = audio.cloneNode(true) as HTMLAudioElement;
-  try { clone.volume = sfxVolume; } catch { /* ignore volume set errors */ }
-  clone.play().catch(() => {});
-  playingClonesRef.current.push(clone);
+        if (pausedRef.current) return;
+        const audio = sounds[idx] as HTMLAudioElement;
+        const clone = audio.cloneNode(true) as HTMLAudioElement;
+        try {
+          clone.volume = sfxVolume;
+        } catch {
+          /* ignore volume set errors */
+        }
+        clone.play().catch(() => {});
+        playingClonesRef.current.push(clone);
       } catch {
         // swallow errors so game keeps running
       }
@@ -976,7 +1043,11 @@ export default function App() {
         if (pausedRef.current) return;
         if (swapRef.current) {
           const clone = swapRef.current.cloneNode(true) as HTMLAudioElement;
-          try { clone.volume = sfxVolume; } catch { /* ignore volume set errors */ }
+          try {
+            clone.volume = sfxVolume;
+          } catch {
+            /* ignore volume set errors */
+          }
           clone.play().catch(() => {});
           playingClonesRef.current.push(clone);
         }
@@ -1008,7 +1079,7 @@ export default function App() {
     const total = Math.max(
       1,
       // prefer explicit targetLines; fall back to a sane default
-  effectiveInputs.targetLines || DEFAULT_TARGET_LINES
+      effectiveInputs.targetLines || DEFAULT_TARGET_LINES
     );
     const queueLen = total + 16;
     const rows: number[][] = [];
@@ -1032,10 +1103,10 @@ export default function App() {
 
     // Set the totalLevelLines so engine computes the rising win line; the
     // engine will add the +16 rows already included above.
-  // Set totalLevelLines so engine computes the rising win line; the
-  // engine will add the +16 rows already included above. We use the
-  // configured targetLines as the total for the engine's win-line math.
-  engineRef.current.totalLevelLines = total;
+    // Set totalLevelLines so engine computes the rising win line; the
+    // engine will add the +16 rows already included above. We use the
+    // configured targetLines as the total for the engine's win-line math.
+    engineRef.current.totalLevelLines = total;
 
     setScene("play");
     setHud({
@@ -1056,6 +1127,30 @@ export default function App() {
     if (advancingRef.current) return;
     advancingRef.current = true;
     try {
+      // If we just won the current level, record its score into the current playthrough.
+      // Prefer the engine state when available to avoid race conditions where HUD lags behind.
+      try {
+        const engineState = engineRef.current?.getState?.();
+        const won = !!(engineState?.hasWon || hud.hasWon);
+        if (won) {
+          const prevId = selectedLevelId;
+          // Prefer the engine state score when available to avoid HUD lag.
+          const scoreToRecord = typeof engineState?.score === "number" ? engineState!.score : hud.score;
+          const entry = { levelId: prevId, score: scoreToRecord };
+          setPlaythroughScores((p) => {
+            const next = [...p, entry];
+            try {
+              if (typeof window !== "undefined")
+                sessionStorage.setItem("currentPlaythrough", JSON.stringify(next));
+            } catch {
+              /* ignore */
+            }
+            return next;
+          });
+        }
+      } catch {
+        /* ignore playthrough recording errors */
+      }
       if (musicRef.current) fadeOutAndStopMusic(musicRef, 200);
       for (const a of playingClonesRef.current) {
         try {
@@ -1068,8 +1163,8 @@ export default function App() {
       playingClonesRef.current = [];
       engineRef.current = null;
       setPaused(false);
-  pausedRef.current = false;
-  pausedByFocusRef.current = false;
+      pausedRef.current = false;
+      pausedByFocusRef.current = false;
       setHud({
         score: 0,
         matches: 0,
@@ -1082,8 +1177,8 @@ export default function App() {
         risePauseMaxMs: 0,
       });
       setSelectedLevelId(levelId);
-      // start the new level
-      startGame(levelId);
+      // start the new level, preserving the current playthrough
+      startGame(levelId, { preservePlaythrough: true });
     } finally {
       advancingRef.current = false;
     }
@@ -1158,7 +1253,11 @@ export default function App() {
                   ref={canvasRef}
                   width={WIDTH * CELL}
                   height={HEIGHT * CELL}
-                  style={{ borderRadius: 8, position: "relative", zIndex: 1000 }}
+                  style={{
+                    borderRadius: 8,
+                    position: "relative",
+                    zIndex: 1000,
+                  }}
                 />
                 {/* Cursor overlay: positioned absolutely over the canvas so it can appear above DOM WinLine */}
                 <div
@@ -1208,27 +1307,27 @@ export default function App() {
                       transition: "width 120ms linear",
                     }}
                   ></div>
-                    {/* STOP label: shows only when the gauge is active (risePauseMaxMs > 0) */}
-                    {hud.risePauseMs > 0 && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          left: 4,
-                          top: "50%",
-                          transform: "translateY(-50%)",
-                          fontSize: 9,
-                          fontWeight: 800,
-                          lineHeight: 1,
-                          color: "#333",
-                          textShadow: "0 2px 2px rgba(223, 210, 210, 1)",
-                          pointerEvents: "none",
-                          zIndex: 1110,
-                          userSelect: "none",
-                        }}
-                      >
-                        STOP!
-                      </div>
-                    )}
+                  {/* STOP label: shows only when the gauge is active (risePauseMaxMs > 0) */}
+                  {hud.risePauseMs > 0 && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 4,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        fontSize: 9,
+                        fontWeight: 800,
+                        lineHeight: 1,
+                        color: "#333",
+                        textShadow: "0 2px 2px rgba(223, 210, 210, 1)",
+                        pointerEvents: "none",
+                        zIndex: 1110,
+                        userSelect: "none",
+                      }}
+                    >
+                      STOP!
+                    </div>
+                  )}
                 </div>
                 {/* Soft fade gradients at top and bottom to mask incoming rows */}
                 <div
@@ -1264,7 +1363,9 @@ export default function App() {
                   percent={winLine.percent}
                   yPx={winLine.yPx}
                   aria-label="Win threshold"
-                  style={{ filter: hud.hasWon || hud.hasLost ? "blur(3px)" : "none" }}
+                  style={{
+                    filter: hud.hasWon || hud.hasLost ? "blur(3px)" : "none",
+                  }}
                 />
                 {/* Title button at top-right of the board */}
                 <button
@@ -1413,16 +1514,16 @@ export default function App() {
                               boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
                             }}
                             onClick={() => {
-                                const idx = LEVELS.findIndex(
-                                  (l) => l.id === selectedLevelId
-                                );
-                                const nextIdx = idx + 1;
-                                if (nextIdx >= LEVELS.length) {
-                                  navigate("/you-beat");
-                                } else {
-                                  const nextId = LEVELS[nextIdx].id;
-                                  advanceToLevel(nextId);
-                                }
+                              const idx = LEVELS.findIndex(
+                                (l) => l.id === selectedLevelId
+                              );
+                              const nextIdx = idx + 1;
+                              if (nextIdx >= LEVELS.length) {
+                                navigate("/you-beat");
+                              } else {
+                                const nextId = LEVELS[nextIdx].id;
+                                advanceToLevel(nextId);
+                              }
                             }}
                           >
                             Next Level
@@ -1480,56 +1581,59 @@ export default function App() {
                     </div>
                   )}
                 {/* Continue overlay for focus-caused pause */}
-                {scene === "play" && !isMobile && paused && pausedByFocusRef.current && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      display: "grid",
-                      placeItems: "center",
-                      color: "#fff",
-                      textShadow: "0 2px 8px rgba(0,0,0,0.6)",
-                      fontWeight: 700,
-                      fontSize: 32,
-                      letterSpacing: 1,
-                      zIndex: 1200,
-                    }}
-                  >
+                {scene === "play" &&
+                  !isMobile &&
+                  paused &&
+                  pausedByFocusRef.current && (
                     <div
                       style={{
-                        padding: "12px 16px",
-                        borderRadius: 8,
-                        background: "rgba(0,0,0,0.5)",
-                        border: "1px solid rgba(255,255,255,0.2)",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
+                        position: "absolute",
+                        inset: 0,
+                        display: "grid",
+                        placeItems: "center",
+                        color: "#fff",
+                        textShadow: "0 2px 8px rgba(0,0,0,0.6)",
+                        fontWeight: 700,
+                        fontSize: 32,
+                        letterSpacing: 1,
+                        zIndex: 1200,
                       }}
                     >
-                      <div>Paused - Click Continue to resume</div>
-                      <button
+                      <div
                         style={{
-                          marginTop: 18,
-                          fontSize: 20,
-                          padding: "8px 24px",
-                          borderRadius: 6,
-                          border: "none",
-                          background: "#34d399",
-                          color: "#222",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-                        }}
-                        onClick={() => {
-                          pausedByFocusRef.current = false;
-                          togglePause();
+                          padding: "12px 16px",
+                          borderRadius: 8,
+                          background: "rgba(0,0,0,0.5)",
+                          border: "1px solid rgba(255,255,255,0.2)",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
                         }}
                       >
-                        Continue
-                      </button>
+                        <div>Paused - Click Continue to resume</div>
+                        <button
+                          style={{
+                            marginTop: 18,
+                            fontSize: 20,
+                            padding: "8px 24px",
+                            borderRadius: 6,
+                            border: "none",
+                            background: "#34d399",
+                            color: "#222",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                          }}
+                          onClick={() => {
+                            pausedByFocusRef.current = false;
+                            togglePause();
+                          }}
+                        >
+                          Continue
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
                 {/* Mobile swap button: simple floating control for tap-to-swap */}
                 {isMobile && scene === "play" && (
                   <button
@@ -1581,7 +1685,10 @@ export default function App() {
                       {/* rise pause indicator already shown above the grid; keep this space for consistency */}
                     </div>
                     <div>
-                      Score: <strong>{hud.score}</strong>
+                      Level Score: <strong>{hud.score}</strong>
+                    </div>
+                    <div>
+                      Total Score: <strong>{totalScore}</strong>
                     </div>
                     <div>
                       Matches (incl. chains): <strong>{hud.matches}</strong>
@@ -1600,7 +1707,10 @@ export default function App() {
                 )}
                 <div style={{ marginBottom: 8 }}>
                   <div style={{ display: "block", marginBottom: 6 }}>
-                    Level: <strong style={{ marginLeft: 8 }}>{LEVELS.find(l => l.id === selectedLevelId)?.name}</strong>
+                    Level:{" "}
+                    <strong style={{ marginLeft: 8 }}>
+                      {LEVELS.find((l) => l.id === selectedLevelId)?.name}
+                    </strong>
                   </div>
                   {/* level selection is handled on the LevelSelect page; keep name display only */}
                 </div>

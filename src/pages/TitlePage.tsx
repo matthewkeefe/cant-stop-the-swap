@@ -79,6 +79,7 @@ const TitlePage: React.FC = () => {
           </button>
           <button onClick={() => nav("/levels")} aria-label="Select level">Levels</button>
           <button onClick={() => nav("/options")}>Options</button>
+          <button onClick={() => nav("/scores")}>Scores</button>
         </div>
       </div>
     </div>

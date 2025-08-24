@@ -1,6 +1,7 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import TitlePage from "./pages/TitlePage";
+import ScorePage from "./pages/ScorePage";
 import OptionsPage from "./pages/OptionsPage";
 import LevelSelectPage from "./pages/LevelSelectPage";
 import App from "./App";
@@ -13,6 +14,7 @@ const AppRoutes: React.FC = () => {
       <Route path="/play" element={<App />} />
       <Route path="/levels" element={<LevelSelectPage />} />
       <Route path="/options" element={<OptionsPage />} />
+      <Route path="/scores" element={<ScorePage />} />
       <Route path="/you-beat" element={<CongratulationsPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
