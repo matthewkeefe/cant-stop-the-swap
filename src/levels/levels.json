@@ -7,7 +7,7 @@
     "color": "#00FFFF",
     "startingLines": 6,
     "targetLines": 5,
-    "raiseRate": 0.0,
+    "raiseRate": 0.15,
     "music": "../assets/music/prism-two.mp3"
   },
   {
@@ -18,8 +18,8 @@
     "color": "#FF4F81",
     "startingLines": 4,
     "targetLines": 10,
-    "raiseRate": 0.052632,
-    "music": "../assets/music/streetwalk-arcade.mp3"
+    "raiseRate": 0.20,
+    "music": "../assets/music/prism-two.mp3"
   },
   {
     "id": "level-3",
@@ -29,8 +29,8 @@
     "color": "#FF4500",
     "startingLines": 8,
     "targetLines": 10,
-    "raiseRate": 0.105263,
-    "music": "../assets/music/graffiti-groove.mp3"
+    "raiseRate": 0.30,
+    "music": "../assets/music/streetwalk-arcade.mp3"
   },
   {
     "id": "level-4",
@@ -40,8 +40,8 @@
     "color": "#ADFF2F",
     "startingLines": 6,
     "targetLines": 10,
-    "raiseRate": 0.157895,
-    "music": "../assets/music/streetlights.mp3"
+    "raiseRate": 0.40,
+    "music": "../assets/music/streetwalk-arcade.mp3"
   },
   {
     "id": "level-5",
@@ -51,7 +51,7 @@
     "color": "#1E90FF",
     "startingLines": 7,
     "targetLines": 10,
-    "raiseRate": 0.210526,
+    "raiseRate": 0.6,
     "music": "../assets/music/streetwalk-arcade.mp3"
   },
   {
@@ -62,8 +62,8 @@
     "color": "#FFD700",
     "startingLines": 6,
     "targetLines": 10,
-    "raiseRate": 0.263158,
-    "music": "../assets/music/upbeat-city-lights.mp3"
+    "raiseRate": 0.5,
+    "music": "../assets/music/graffiti-groove.mp3"
   },
   {
     "id": "level-7",
@@ -73,8 +73,8 @@
     "color": "#40E0D0",
     "startingLines": 7,
     "targetLines": 10,
-    "raiseRate": 0.315789,
-    "music": "../assets/music/breakdown.mp3"
+    "raiseRate": 0.6,
+    "music": "../assets/music/graffiti-groove.mp3"
   },
   {
     "id": "level-8",
@@ -84,8 +84,8 @@
     "color": "#FF00FF",
     "startingLines": 6,
     "targetLines": 10,
-    "raiseRate": 0.368421,
-    "music": "../assets/music/upbeat-city-lights.mp3"
+    "raiseRate": 0.7,
+    "music": "../assets/music/graffiti-groove.mp3"
   },
   {
     "id": "level-9",
@@ -95,7 +95,7 @@
     "color": "#FF69B4",
     "startingLines": 3,
     "targetLines": 10,
-    "raiseRate": 0.421053,
+    "raiseRate": 0.75,
     "music": "../assets/music/graffiti-groove.mp3"
   },
   {
@@ -106,8 +106,8 @@
     "color": "#00FF7F",
     "startingLines": 6,
     "targetLines": 10,
-    "raiseRate": 0.473684,
-    "music": "../assets/music/streetwalk-arcade.mp3"
+    "raiseRate": 0.8,
+    "music": "../assets/music/upbeat-city-lights.mp3"
   },
   {
     "id": "level-11",
@@ -117,7 +117,7 @@
     "color": "#00BFFF",
     "startingLines": 8,
     "targetLines": 10,
-    "raiseRate": 0.526316,
+    "raiseRate": 0.7,
     "music": "../assets/music/graffiti-groove.mp3"
   },
   {
@@ -128,7 +128,7 @@
     "color": "#FFD700",
     "startingLines": 4,
     "targetLines": 10,
-    "raiseRate": 0.578947,
+    "raiseRate": 0.9,
     "music": "../assets/music/streetlights.mp3"
   },
   {
@@ -137,9 +137,9 @@
     "shortName": "13",
     "background": "../assets/background/graffiti-lantern.png",
     "color": "#1E90FF",
-    "startingLines": 6,
+    "startingLines": 7,
     "targetLines": 10,
-    "raiseRate": 0.631579,
+    "raiseRate": 0.8,
     "music": "../assets/music/breakdown.mp3"
   },
   {
@@ -150,7 +150,7 @@
     "color": "#FF4500",
     "startingLines": 7,
     "targetLines": 10,
-    "raiseRate": 0.684211,
+    "raiseRate": 0.85,
     "music": "../assets/music/breakdown.mp3"
   },
   {
@@ -161,7 +161,7 @@
     "color": "#39FF14",
     "startingLines": 4,
     "targetLines": 10,
-    "raiseRate": 0.736842,
+    "raiseRate": 1.0,
     "music": "../assets/music/streetwalk-arcade.mp3"
   },
   {
@@ -172,7 +172,7 @@
     "color": "#ADFF2F",
     "startingLines": 6,
     "targetLines": 10,
-    "raiseRate": 0.789474,
+    "raiseRate": 1.1,
     "music": "../assets/music/streetwalk-arcade.mp3"
   },
   {
@@ -183,7 +183,7 @@
     "color": "#00FFFF",
     "startingLines": 5,
     "targetLines": 10,
-    "raiseRate": 0.842105,
+    "raiseRate": 1.2,
     "music": "../assets/music/upbeat-city-lights.mp3"
   },
   {
@@ -194,7 +194,7 @@
     "color": "#DC143C",
     "startingLines": 6,
     "targetLines": 10,
-    "raiseRate": 0.894737,
+    "raiseRate": 1.5,
     "music": "../assets/music/upbeat-city-lights.mp3"
   },
   {
@@ -205,7 +205,7 @@
     "color": "#FFFF00",
     "startingLines": 7,
     "targetLines": 10,
-    "raiseRate": 0.947368,
+    "raiseRate": 1.6,
     "music": "../assets/music/graffiti-groove.mp3"
   },
   {
@@ -214,9 +214,9 @@
     "shortName": "20",
     "background": "../assets/background/graffiti-stars.png",
     "color": "#FF1493",
-    "startingLines": 5,
+    "startingLines": 8,
     "targetLines": 10,
-    "raiseRate": 1.0,
+    "raiseRate": 1.6,
     "music": "../assets/music/upbeat-city-lights.mp3"
   }
 ]

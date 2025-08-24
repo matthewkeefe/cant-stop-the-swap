@@ -374,12 +374,10 @@ export class Engine {
     }
   }
 
-  manualRaiseOnce(): boolean {
-    if (this.phase !== "idle" || this.hasWon || this.hasLost) return false;
-    const lost = this.insertRowFromBottom();
-    if (lost) this.hasLost = true;
-    return lost;
-  }
+  // manualRaiseOnce removed: X now temporarily increases the raise rate while held
+  // and no other callers reference a manual single-row insertion. The
+  // underlying insertion helpers (`insertRowFromBottom` / `insertRowFromBottomFromQueue`)
+  // remain for internal engine usage and automatic rising.
 
   update(dtMs: number) {
     if (this.hasWon || this.hasLost) return;
@@ -766,20 +764,8 @@ export class Engine {
    *
    * @returns {boolean} `true` if the top row is occupied and insertion is not possible, `false` otherwise.
    */
-  private insertRowFromBottom(): boolean {
-    for (let x = 0; x < this.width; x++) {
-      if (this.grid[0][x] >= 0) return true;
-    }
-    for (let y = 0; y < this.height - 1; y++) {
-      this.grid[y] = this.grid[y + 1].slice();
-    }
-    const rawRow: number[] = Array.from({ length: this.width }, () =>
-      this.randColorIndex()
-    );
-    this.grid[this.height - 1] = this.sanitizeRow(rawRow);
-    this.cursorY = Math.max(0, this.cursorY - 1);
-    return false;
-  }
+  // insertRowFromBottom removed: engine uses queue-based insertion
+  // via insertRowFromBottomFromQueue() during automatic rising.
 
   /**
    * Returns the current game state as a `GameState` object.

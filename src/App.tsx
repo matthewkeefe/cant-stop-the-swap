@@ -97,6 +97,9 @@ export default function App() {
   const soundsRef = useRef<HTMLAudioElement[] | null>(null);
   // Preload swap sound
   const swapRef = useRef<HTMLAudioElement | null>(null);
+  // Track created music and sfx instances so we can reliably stop them
+  const musicSetRef = useRef<Set<HTMLAudioElement>>(new Set());
+  const sfxSetRef = useRef<Set<HTMLAudioElement>>(new Set());
   // Track currently playing cloned sounds so we can stop them on pause
   const playingClonesRef = useRef<HTMLAudioElement[]>([]);
   // Pause state (pause stops automatic rising and mutes future sounds)
@@ -104,18 +107,31 @@ export default function App() {
   const pausedRef = useRef(paused);
   // Whether the current pause was caused by losing window/tab focus (visibility/blur)
   const pausedByFocusRef = useRef(false);
+  // Track whether the X key is currently held and the previous raise rate to restore
+  const xHoldRef = useRef(false);
+  const xPrevRateRef = useRef<number | null>(null);
   // Remember previous scroll speed so we can restore after unpausing
   const prevScrollSpeedRef = useRef<number | null>(null);
   if (!soundsRef.current) {
     soundsRef.current = [snd0, snd1, snd2, snd3, snd4].map((u) => {
       const a = new Audio(u);
       a.preload = "auto";
+      try {
+        sfxSetRef.current.add(a);
+      } catch {
+        /* ignore */
+      }
       return a;
     });
   }
   if (!swapRef.current) {
     swapRef.current = new Audio(swapSnd);
     swapRef.current.preload = "auto";
+    try {
+      sfxSetRef.current.add(swapRef.current);
+    } catch {
+      /* ignore */
+    }
   }
   // Music element for the currently playing level
   const musicRef = useRef<HTMLAudioElement | null>(null);
@@ -340,10 +356,20 @@ export default function App() {
             try {
               m.pause();
               m.currentTime = 0;
+              try {
+                musicSetRef.current.delete(m);
+              } catch {
+                /* ignore */
+              }
             } catch {
               /* ignore */
             }
-            mRef.current = null;
+            // Only clear the external ref if it still points to the same audio
+            try {
+              if (mRef.current === m) mRef.current = null;
+            } catch {
+              /* ignore */
+            }
           } else {
             setTimeout(tick, step);
           }
@@ -353,14 +379,69 @@ export default function App() {
         try {
           m.pause();
           m.currentTime = 0;
+          try {
+            musicSetRef.current.delete(m);
+          } catch {
+            /* ignore */
+          }
         } catch {
           /* ignore */
         }
-        mRef.current = null;
+        try {
+          if (mRef.current === m) mRef.current = null;
+        } catch {
+          /* ignore */
+        }
       }
     },
     [musicVolume]
   );
+
+  // Force-stop all tracked audio instances immediately (no fade)
+  const forceStopAllAudioImmediate = useCallback(() => {
+    try {
+      for (const m of Array.from(musicSetRef.current)) {
+        try {
+          m.pause();
+          m.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
+        try {
+          musicSetRef.current.delete(m);
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      for (const s of Array.from(sfxSetRef.current)) {
+        try {
+          s.pause();
+          s.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
+        try {
+          sfxSetRef.current.delete(s);
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    // Also clear the single musicRef pointer to avoid stale references
+    try {
+      if (musicRef.current) {
+        musicRef.current = null;
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // Pause music and stop playing SFX when navigating away from the /play route
   useEffect(() => {
@@ -375,32 +456,23 @@ export default function App() {
         path.startsWith("/options") ||
         path.startsWith("/levels")
       ) {
-        if (musicRef.current) {
-          try {
-            // Attempt a graceful fade first
-            fadeOutAndStopMusic(musicRef, 200);
-          } catch {
-            /* ignore */
-          }
-          // Also force-stop immediately to avoid lingering audio in edge cases
-          try {
-            musicRef.current.pause();
-            musicRef.current.currentTime = 0;
-          } catch {
-            /* ignore */
-          }
-          musicRef.current = null;
+        // Try a graceful fade, but also force-stop all tracked music to prevent lingering audio
+        try {
+          fadeOutAndStopMusic(musicRef, 200);
+        } catch {
+          /* ignore */
+        }
+        try {
+          forceStopAllAudioImmediate();
+        } catch {
+          /* ignore */
         }
       } else {
         // Other non-play routes: ensure music is stopped immediately
-        if (musicRef.current) {
-          try {
-            musicRef.current.pause();
-            musicRef.current.currentTime = 0;
-          } catch {
-            /* ignore */
-          }
-          musicRef.current = null;
+        try {
+          forceStopAllAudioImmediate();
+        } catch {
+          /* ignore */
         }
       }
 
@@ -417,7 +489,7 @@ export default function App() {
     } catch {
       /* ignore */
     }
-  }, [location.pathname, fadeOutAndStopMusic]);
+  }, [location.pathname, fadeOutAndStopMusic, forceStopAllAudioImmediate]);
 
   // Load atlases once
   useEffect(() => {
@@ -499,9 +571,22 @@ export default function App() {
           if (!pausedRef.current) engineRef.current.swap();
           break;
         case "x":
-        case "X":
-          engineRef.current.manualRaiseOnce();
+        case "X": {
+          // When X is pressed, switch the raise rate to 2 rows/sec while held.
+          // If already held, ignore repeats.
+          if (!xHoldRef.current && engineRef.current) {
+            xHoldRef.current = true;
+            // Save previous autoRiseRate and scroll speed so we can restore
+            xPrevRateRef.current = engineRef.current.autoRiseRateRowsPerSec ?? null;
+            try {
+              engineRef.current.autoRiseRateRowsPerSec = 2;
+              engineRef.current.scrollSpeedPxPerSec = 2 * engineRef.current.cellSize;
+            } catch {
+              /* ignore */
+            }
+          }
           break;
+        }
         case "r":
         case "R":
           startGame();
@@ -515,6 +600,34 @@ export default function App() {
       }
     };
     window.addEventListener("keydown", onKeyDown);
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "x" || e.key === "X") {
+        // Restore previous raise rate when X is released
+        if (xHoldRef.current && engineRef.current) {
+          xHoldRef.current = false;
+          const prev = xPrevRateRef.current;
+          if (typeof prev === "number" && prev > 0) {
+            try {
+              engineRef.current.autoRiseRateRowsPerSec = prev;
+              engineRef.current.scrollSpeedPxPerSec = prev * engineRef.current.cellSize;
+            } catch {
+              /* ignore */
+            }
+          } else {
+            // If no previous value saved, fall back to engine default or zero
+            try {
+              const fallback = engineRef.current.autoRiseRateRowsPerSec ?? 0.1;
+              engineRef.current.autoRiseRateRowsPerSec = fallback;
+              engineRef.current.scrollSpeedPxPerSec = fallback * engineRef.current.cellSize;
+            } catch {
+              /* ignore */
+            }
+          }
+          xPrevRateRef.current = null;
+        }
+      }
+    };
+    window.addEventListener("keyup", onKeyUp);
 
     // Mobile pointer handlers: enable touch-to-move and tap-to-swap when mobile
     const canvasEl = canvasRef.current;
@@ -880,8 +993,9 @@ export default function App() {
 
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("blur", onWindowBlur);
+  window.removeEventListener("visibilitychange", onVisibilityChange);
+  window.removeEventListener("blur", onWindowBlur);
+  window.removeEventListener("keyup", onKeyUp);
       if (canvasEl) {
         canvasEl.removeEventListener("pointerdown", onPointerDown);
         canvasEl.removeEventListener("pointermove", onPointerMove);
@@ -938,11 +1052,25 @@ export default function App() {
       const lvl = LEVELS.find((l) => l.id === selectedLevelId);
       if (lvl && lvl.music) {
         try {
+          // Stop any previous music immediately before starting new one
+          try {
+            if (musicRef.current) {
+              musicRef.current.pause();
+              musicRef.current.currentTime = 0;
+            }
+          } catch {
+            /* ignore */
+          }
           const m = new Audio(lvl.music);
           m.loop = true;
           m.preload = "auto";
           m.volume = musicVolume;
           m.play().catch(() => {});
+          try {
+            musicSetRef.current.add(m);
+          } catch {
+            /* ignore */
+          }
           musicRef.current = m;
         } catch {
           // ignore
@@ -996,8 +1124,43 @@ export default function App() {
     engineRef.current.cellSize = CELL;
     engineRef.current.targetLines = effectiveInputs.targetLines;
 
-    // Use the explicit raise rate from effectiveInputs
-    engineRef.current.autoRiseRateRowsPerSec = effectiveInputs.rate;
+    // Determine an effective raise rate. If the level provides a non-positive
+    // raiseRate (e.g. 0.0), fall back to the UI input or engine default so the
+    // game actually rises instead of being paused.
+    // Ensure there's always a small positive raise rate. If both the level
+    // and UI inputs are zero/non-positive, fall back to a small safe default
+    // so the level still rises during playtests.
+    const MIN_RAISE_RATE = 0.05; // rows per second (minimum)
+    const MAX_RAISE_RATE = 0.6; // rows per second (maximum for normalized rates)
+
+    const mapNormalized = (v: number) =>
+      MIN_RAISE_RATE + v * (MAX_RAISE_RATE - MIN_RAISE_RATE);
+
+    // Normalize fallback from UI input: if input rate is in [0,1] treat as normalized
+    let fallbackRate = engineRef.current.autoRiseRateRowsPerSec ?? MAX_RAISE_RATE;
+    if (typeof inputs.rate === "number" && inputs.rate > 0) {
+      fallbackRate = inputs.rate <= 1 ? mapNormalized(inputs.rate) : inputs.rate;
+    } else {
+      fallbackRate = Math.max(fallbackRate, MIN_RAISE_RATE);
+    }
+
+    let chosenRate: number;
+    if (typeof effectiveInputs.rate === "number" && effectiveInputs.rate > 0) {
+      // If level-provided rate is normalized (<=1) map into usable range.
+      chosenRate =
+        effectiveInputs.rate <= 1
+          ? mapNormalized(effectiveInputs.rate)
+          : effectiveInputs.rate;
+    } else {
+      chosenRate = fallbackRate;
+    }
+    // Apply chosen rate to the engine (rows/sec) and compute pixel scroll speed
+    engineRef.current.autoRiseRateRowsPerSec = chosenRate;
+    try {
+      engineRef.current.scrollSpeedPxPerSec = chosenRate * engineRef.current.cellSize;
+    } catch {
+      /* ignore */
+    }
 
     // Prevent swapping while paused by wrapping the instance method
     const origSwap = engineRef.current.swap.bind(engineRef.current);
@@ -1067,11 +1230,25 @@ export default function App() {
     // Start playing level music if provided (use effective level id)
     if (lvlForStart && lvlForStart.music) {
       try {
+        // Stop any previous music immediately before starting new one
+        try {
+          if (musicRef.current) {
+            musicRef.current.pause();
+            musicRef.current.currentTime = 0;
+          }
+        } catch {
+          /* ignore */
+        }
         const m = new Audio(lvlForStart.music);
         m.loop = true;
         m.preload = "auto";
         m.volume = 0.25; // default music volume
         m.play().catch(() => {});
+        try {
+          musicSetRef.current.add(m);
+        } catch {
+          /* ignore */
+        }
         musicRef.current = m;
       } catch {
         // ignore

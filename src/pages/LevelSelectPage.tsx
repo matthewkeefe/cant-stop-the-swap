@@ -62,8 +62,10 @@ const LevelSelectPage: React.FC = () => {
     } catch (e) {
       void e;
     }
-    // navigate to play; App will read selectedLevelId from localStorage on mount
-    navigate("/play");
+  // navigate to play and include the chosen level id in navigation state so
+  // the App can start that level immediately with the correct settings.
+  // Also keep the selectedLevelId in localStorage for other tabs or reloads.
+  navigate("/play", { state: { startLevelId: id } });
   };
 
   return (
