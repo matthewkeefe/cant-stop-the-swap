@@ -368,7 +368,7 @@ export default function App() {
       // Treat any route under /play as the active game.
       if (path.startsWith("/play")) return;
 
-      // If navigating to Title, Options, or Level Select, gracefully fade out music
+      // If navigating to Title, Options, or Level Select, aggressively stop music
       if (
         path === "/" ||
         path.startsWith("/options") ||
@@ -376,17 +376,19 @@ export default function App() {
       ) {
         if (musicRef.current) {
           try {
+            // Attempt a graceful fade first
             fadeOutAndStopMusic(musicRef, 200);
-          } catch (e) {
-            void e;
-            try {
-              musicRef.current.pause();
-              musicRef.current.currentTime = 0;
-            } catch (ee) {
-              void ee;
-            }
-            musicRef.current = null;
+          } catch {
+            /* ignore */
           }
+          // Also force-stop immediately to avoid lingering audio in edge cases
+          try {
+            musicRef.current.pause();
+            musicRef.current.currentTime = 0;
+          } catch {
+            /* ignore */
+          }
+          musicRef.current = null;
         }
       } else {
         // Other non-play routes: ensure music is stopped immediately
@@ -1133,7 +1135,9 @@ export default function App() {
         const engineState = engineRef.current?.getState?.();
         const won = !!(engineState?.hasWon || hud.hasWon);
         if (won) {
-          const prevId = selectedLevelId;
+          // Use the ref to ensure we record the actual currently-selected level
+          // even if this function was called from an older closure.
+          const prevId = selectedLevelIdRef.current;
           // Prefer the engine state score when available to avoid HUD lag.
           const scoreToRecord = typeof engineState?.score === "number" ? engineState!.score : hud.score;
           const entry = { levelId: prevId, score: scoreToRecord };
@@ -1423,6 +1427,32 @@ export default function App() {
                   onMouseEnter={() => setOptionsHover(true)}
                   onMouseLeave={() => setOptionsHover(false)}
                   onClick={() => {
+                    // Stop music and playing clones, reset engine and HUD, then go to Options
+                    if (musicRef.current) fadeOutAndStopMusic(musicRef, 200);
+                    for (const a of playingClonesRef.current) {
+                      try {
+                        a.pause();
+                        a.currentTime = 0;
+                      } catch {
+                        /* ignore clone stop errors */
+                      }
+                    }
+                    playingClonesRef.current = [];
+                    engineRef.current = null;
+                    setPaused(false);
+                    pausedRef.current = false;
+                    setHud({
+                      score: 0,
+                      matches: 0,
+                      chains: 0,
+                      linesEq: 0,
+                      tilesAbove: 0,
+                      hasWon: false,
+                      hasLost: false,
+                      risePauseMs: 0,
+                      risePauseMaxMs: 0,
+                    });
+                    pausedByFocusRef.current = false;
                     navigate("/options");
                   }}
                   aria-label="Options"
@@ -1449,6 +1479,32 @@ export default function App() {
                   onMouseEnter={() => setLevelsHover(true)}
                   onMouseLeave={() => setLevelsHover(false)}
                   onClick={() => {
+                    // Stop music and playing clones, reset engine and HUD, then go to Levels
+                    if (musicRef.current) fadeOutAndStopMusic(musicRef, 200);
+                    for (const a of playingClonesRef.current) {
+                      try {
+                        a.pause();
+                        a.currentTime = 0;
+                      } catch {
+                        /* ignore clone stop errors */
+                      }
+                    }
+                    playingClonesRef.current = [];
+                    engineRef.current = null;
+                    setPaused(false);
+                    pausedRef.current = false;
+                    setHud({
+                      score: 0,
+                      matches: 0,
+                      chains: 0,
+                      linesEq: 0,
+                      tilesAbove: 0,
+                      hasWon: false,
+                      hasLost: false,
+                      risePauseMs: 0,
+                      risePauseMaxMs: 0,
+                    });
+                    pausedByFocusRef.current = false;
                     navigate("/levels");
                   }}
                   aria-label="Levels"

@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import LEVELS from "../levels";
 
 const ScorePage: React.FC = () => {
   const navigate = useNavigate();
@@ -40,11 +41,15 @@ const ScorePage: React.FC = () => {
         ) : (
           <div>
             <ul>
-              {scores.map((s, i) => (
-                <li key={i}>
-                  {s.levelId}: <strong>{s.score}</strong>
-                </li>
-              ))}
+              {scores.map((s, i) => {
+                const lvl = LEVELS.find((l) => l.id === s.levelId);
+                const label = lvl ? lvl.name : s.levelId;
+                return (
+                  <li key={i}>
+                    {label}: <strong>{s.score}</strong>
+                  </li>
+                );
+              })}
             </ul>
             <div style={{ marginTop: 8 }}>
               Total: <strong>{total}</strong>
