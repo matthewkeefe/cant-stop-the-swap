@@ -220,7 +220,6 @@ export default function App() {
     }
   }, [musicVolume, sfxVolume]);
 
-  
   // Fade out current music smoothly over `durationMs` then stop and clear ref.
   const fadeOutAndStopMusic = useCallback((durationMs = 300) => {
     try {
@@ -333,9 +332,9 @@ export default function App() {
       const startLevelId = navState?.startLevelId;
       // If engine already running, do nothing
       if (engineRef.current) return;
-  // Auto-start regardless of device when navigating to /play
-  if (startLevelId) startGame(startLevelId);
-  else startGame();
+      // Auto-start regardless of device when navigating to /play
+      if (startLevelId) startGame(startLevelId);
+      else startGame();
     } catch {
       /* ignore */
     }
@@ -380,7 +379,7 @@ export default function App() {
     pausedRef,
     xHoldRef,
     xPrevRateRef,
-  baseRaiseRateRef,
+    baseRaiseRateRef,
   });
 
   // Small diagnostic overlay to show last pointer/tap info when enabled.
@@ -395,9 +394,23 @@ export default function App() {
       const last = d.lastPointer;
       if (!last) return null;
       return (
-        <div style={{ position: 'fixed', left: 8, top: 8, zIndex: 9999, background: 'rgba(0,0,0,0.6)', color: 'white', padding: 8, fontSize: 12, borderRadius: 6 }}>
+        <div
+          style={{
+            position: 'fixed',
+            left: 8,
+            top: 8,
+            zIndex: 9999,
+            background: 'rgba(0,0,0,0.6)',
+            color: 'white',
+            padding: 8,
+            fontSize: 12,
+            borderRadius: 6,
+          }}
+        >
           <div>Last: {last.type}</div>
-          <div>cell: {last.cellX ?? '-'} / {last.cellY ?? '-'}</div>
+          <div>
+            cell: {last.cellX ?? '-'} / {last.cellY ?? '-'}
+          </div>
           <div>moved: {String(last.moved ?? false)}</div>
           <div>dur: {last.duration ?? '-'}</div>
           <div>phase: {last.phase ?? '-'}</div>
@@ -485,8 +498,8 @@ export default function App() {
         canvas.height = backingHeight;
 
         // store current DPR and cell CSS size for rendering
-  canvasWithMeta._devicePixelRatio = dpr;
-  canvasWithMeta._cssCellSize = cssCellSize;
+        canvasWithMeta._devicePixelRatio = dpr;
+        canvasWithMeta._cssCellSize = cssCellSize;
 
         // If engine exists, set its cellSize to CSS pixels so logic that uses
         // engine.cellSize (e.g., scroll speed) remains in CSS coordinate space.
@@ -495,7 +508,8 @@ export default function App() {
           // Recompute scroll speed if a base raise rate is present
           try {
             if (baseRaiseRateRef.current) {
-              engineRef.current.scrollSpeedPxPerSec = baseRaiseRateRef.current * engineRef.current.cellSize;
+              engineRef.current.scrollSpeedPxPerSec =
+                baseRaiseRateRef.current * engineRef.current.cellSize;
             }
           } catch {
             /* ignore */
@@ -507,8 +521,8 @@ export default function App() {
         canvas.height = HEIGHT * CELL;
         canvas.style.width = `${WIDTH * CELL}px`;
         canvas.style.height = `${HEIGHT * CELL}px`;
-  canvasWithMeta._devicePixelRatio = 1;
-  canvasWithMeta._cssCellSize = CELL;
+        canvasWithMeta._devicePixelRatio = 1;
+        canvasWithMeta._cssCellSize = CELL;
       }
     };
 
@@ -518,7 +532,7 @@ export default function App() {
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
 
-  // input handlers moved to useGameInput hook
+    // input handlers moved to useGameInput hook
     // Auto-pause when the tab/window loses focus
     const onVisibilityChange = () => {
       if (scene === 'play' && !pausedRef.current && document.hidden) {
@@ -574,7 +588,7 @@ export default function App() {
     window.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('blur', onWindowBlur);
 
-  let raf = 0;
+    let raf = 0;
     let last = performance.now();
     const ctx = canvas.getContext('2d')!;
 
@@ -584,9 +598,9 @@ export default function App() {
       const dt = now - last;
       last = now;
 
-  if (scene === 'play' && engineRef.current) {
-  engineRef.current.update(dt);
-  const s = engineRef.current.getState();
+      if (scene === 'play' && engineRef.current) {
+        engineRef.current.update(dt);
+        const s = engineRef.current.getState();
 
         // Skins (background + foreground) when atlases are ready —
         // use the extracted helpers in src/lib/graphics.ts
@@ -674,13 +688,13 @@ export default function App() {
           const overlay = cursorOverlayRef.current;
           if (overlay) {
             const childId = 'dom-cursor-box';
-                // Cursor overlay works in CSS pixels; use cssCell size for positioning
-                const cssCell = canvasWithMeta._cssCellSize || CELL;
-                const cx = s.cursorX * cssCell + 1.5;
-                const cy = s.cursorY * cssCell - (s.scrollOffsetPx ?? 0) + 1.5;
-                const w = cssCell * 2 - 3;
-                const h = cssCell - 3;
-                const radius = Math.min(10, Math.max(4, Math.floor(cssCell * 0.12)));
+            // Cursor overlay works in CSS pixels; use cssCell size for positioning
+            const cssCell = canvasWithMeta._cssCellSize || CELL;
+            const cx = s.cursorX * cssCell + 1.5;
+            const cy = s.cursorY * cssCell - (s.scrollOffsetPx ?? 0) + 1.5;
+            const w = cssCell * 2 - 3;
+            const h = cssCell - 3;
+            const radius = Math.min(10, Math.max(4, Math.floor(cssCell * 0.12)));
             updateCursorOverlay(overlay, childId, cx, cy, w, h, radius);
           }
         } catch {
@@ -700,9 +714,9 @@ export default function App() {
     return () => {
       window.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onWindowBlur);
-  cancelAnimationFrame(raf);
-  window.removeEventListener('resize', onResize);
-  window.removeEventListener('orientationchange', onResize);
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
     };
     // startGame and togglePause are stable, so we can safely ignore them for this effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -770,7 +784,7 @@ export default function App() {
       }
     }
     // Stop previous music when starting/restarting (fade out)
-  if (musicRef.current) fadeOutAndStopMusic(200);
+    if (musicRef.current) fadeOutAndStopMusic(200);
 
     // Determine effective level and inputs (prefer explicit levelId when provided)
     const effectiveLevelId = levelId ?? selectedLevelId;
@@ -794,10 +808,10 @@ export default function App() {
       setInputs((p) => ({ ...p, ...effectiveInputs }));
     }
 
-  const e = engineMgrRef.current.start(WIDTH, HEIGHT, 5);
-  engineRef.current = e;
-  engineRef.current.cellSize = CELL;
-  engineRef.current.targetLines = effectiveInputs.targetLines;
+    const e = engineMgrRef.current.start(WIDTH, HEIGHT, 5);
+    engineRef.current = e;
+    engineRef.current.cellSize = CELL;
+    engineRef.current.targetLines = effectiveInputs.targetLines;
 
     // Determine an effective raise rate. If the level provides a non-positive
     // raiseRate (e.g. 0.0), fall back to the UI input or engine default so the
@@ -827,9 +841,9 @@ export default function App() {
       chosenRate = fallbackRate;
     }
     // Apply chosen rate to the engine (rows/sec) and compute pixel scroll speed
-  engineRef.current.autoRiseRateRowsPerSec = chosenRate;
-  // remember the base raise rate for the current level
-  baseRaiseRateRef.current = chosenRate;
+    engineRef.current.autoRiseRateRowsPerSec = chosenRate;
+    // remember the base raise rate for the current level
+    baseRaiseRateRef.current = chosenRate;
     try {
       engineRef.current.scrollSpeedPxPerSec = chosenRate * engineRef.current.cellSize;
     } catch {
@@ -957,7 +971,7 @@ export default function App() {
       } catch {
         /* ignore playthrough recording errors */
       }
-  if (musicRef.current) fadeOutAndStopMusic(200);
+      if (musicRef.current) fadeOutAndStopMusic(200);
       try {
         audioMgrRef.current.stopPlayingClones();
       } catch {
@@ -989,6 +1003,14 @@ export default function App() {
   // preset change handler removed — UI no longer exposes rise preset controls
 
   // game framework
+
+  // When playing on mobile we want no padding/margins around the canvas so
+  // the board fills the viewport. Compute a few helper style values.
+  const containerPadding = isMobile && scene === 'play' ? 0 : 16;
+  const containerWidth =
+    isMobile && scene === 'play' ? '100vw' : `min(${WIDTH * CELL + 280}px, 90vw)`;
+  const boardCssWidth = isMobile && scene === 'play' ? '100%' : WIDTH * CELL;
+
   return (
     <div
       style={{
@@ -1000,7 +1022,7 @@ export default function App() {
         background: '#0b0b0e',
         color: '#cbd5e1',
         fontFamily: 'ui-sans-serif, system-ui',
-        padding: 16,
+        padding: containerPadding,
         boxSizing: 'border-box',
       }}
     >
@@ -1013,8 +1035,8 @@ export default function App() {
           height: '100%',
         }}
       >
-  {/* Debug overlay - toggle by setting window.__CSTS_DEBUG_SHOW = true in dev console */}
-  <DebugOverlay />
+        {/* Debug overlay - toggle by setting window.__CSTS_DEBUG_SHOW = true in dev console */}
+        <DebugOverlay />
         <div
           style={{
             display: 'grid',
@@ -1029,7 +1051,7 @@ export default function App() {
               gap: 16,
               alignItems: 'start',
               // Responsive container: don't exceed viewport on small devices
-              width: `min(${WIDTH * CELL + 280}px, 90vw)`,
+              width: containerWidth,
               maxWidth: '100%',
             }}
           >
@@ -1038,7 +1060,7 @@ export default function App() {
               <div
                 style={{
                   position: 'relative',
-                  width: WIDTH * CELL,
+                  width: boardCssWidth,
                   border: '2px solid #888',
                   backgroundColor: '#0f0f12',
                   borderRadius: 8,
@@ -1059,6 +1081,8 @@ export default function App() {
                     borderRadius: 8,
                     position: 'relative',
                     zIndex: 1000,
+                    width: isMobile && scene === 'play' ? '100%' : undefined,
+                    height: isMobile && scene === 'play' ? '100%' : undefined,
                   }}
                 />
                 {/* Cursor overlay: positioned absolutely over the canvas so it can appear above DOM WinLine */}
@@ -1069,8 +1093,8 @@ export default function App() {
                     position: 'absolute',
                     left: 0,
                     top: 0,
-                    width: WIDTH * CELL,
-                    height: HEIGHT * CELL,
+                    width: isMobile && scene === 'play' ? '100%' : WIDTH * CELL,
+                    height: isMobile && scene === 'play' ? '100%' : HEIGHT * CELL,
                     pointerEvents: 'none',
                     zIndex: 1400,
                   }}
@@ -1165,8 +1189,7 @@ export default function App() {
                     filter: hud.hasWon || hud.hasLost ? 'blur(3px)' : 'none',
                   }}
                 />
-                {/* Title button at top-right of the board */}
-                {!isMobile && (
+                {/* Title button at top-right of the board */}(
                 <button
                   onMouseEnter={() => setTitleHover(true)}
                   onMouseLeave={() => setTitleHover(false)}
@@ -1218,9 +1241,7 @@ export default function App() {
                 >
                   Title
                 </button>
-                )}
-                {/* Options button, same style as Title, sits to the left of it */}
-                {!isMobile && (
+                ){/* Options button, same style as Title, sits to the left of it */}(
                 <button
                   onMouseEnter={() => setOptionsHover(true)}
                   onMouseLeave={() => setOptionsHover(false)}
@@ -1273,9 +1294,7 @@ export default function App() {
                 >
                   Options
                 </button>
-                )}
-                {/* Levels button between Options and Title */}
-                {!isMobile && (
+                ){/* Levels button between Options and Title */}(
                 <button
                   onMouseEnter={() => setLevelsHover(true)}
                   onMouseLeave={() => setLevelsHover(false)}
@@ -1328,7 +1347,7 @@ export default function App() {
                 >
                   Levels
                 </button>
-                )}
+                )
                 {scene === 'play' && (hud.hasWon || hud.hasLost) && (
                   <div
                     style={{

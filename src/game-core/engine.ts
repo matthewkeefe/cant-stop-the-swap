@@ -343,7 +343,13 @@ export class Engine {
     const y = Math.max(0, Math.min(this.height - 1, yIn | 0));
     // Debug: log swap attempt and why it may be ignored
     try {
-      console.debug('[Engine] swapAt called', { x, y, phase: this.phase, hasWon: this.hasWon, hasLost: this.hasLost });
+      console.debug('[Engine] swapAt called', {
+        x,
+        y,
+        phase: this.phase,
+        hasWon: this.hasWon,
+        hasLost: this.hasLost,
+      });
     } catch {
       /* ignore */
     }

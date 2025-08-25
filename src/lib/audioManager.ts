@@ -76,7 +76,7 @@ export function createAudioManager() {
         } catch {
           void 0;
         }
-          if (p >= 1) {
+        if (p >= 1) {
           try {
             m.pause();
             m.currentTime = 0;

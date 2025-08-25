@@ -26,7 +26,9 @@ export function cursorSvg(childId: string, w: number, h: number, radius: number)
           </feMerge>
         </filter>
       </defs>
-      <rect x="${strokeWidth / 2}" y="${strokeWidth / 2}" rx="${radius}" ry="${radius}" width="${w - strokeWidth}" height="${h - strokeWidth}" fill="none"
+      <rect x="${strokeWidth / 2}" y="${strokeWidth / 2}" rx="${radius}" ry="${radius}" width="${
+    w - strokeWidth
+  }" height="${h - strokeWidth}" fill="none"
         stroke="url(#cursor-grad)" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dashLen} ${dashGap}" filter="url(#cursor-glow)" />
     </svg>
   `;
