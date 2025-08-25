@@ -9,7 +9,6 @@ import { drawStateToCanvas, type Skin } from './renderer/canvasRenderer';
 import useGameInput from './hooks/useGameInput';
 import { createAudioManager } from './lib/audioManager';
 import { buildBgSkin, buildFgSkin } from './lib/graphics';
-import { updateCursorOverlay } from './lib/cursorOverlay';
 
 import tilesGemsPng from './assets/sprites/gems.png';
 import tilesGemsXmlUrl from './assets/sprites/gems.xml?url';
@@ -53,21 +52,12 @@ export default function App() {
   const engineRef = useRef<Engine | null>(null);
   const engineMgrRef = useRef(createEngineManager());
   const lastCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  // Touch state for mobile pointer interactions
-  const touchStateRef = useRef<{
-    active: boolean;
-    startTime: number;
-    startX: number;
-    startY: number;
-    moved: boolean;
-  }>({ active: false, startTime: 0, startX: 0, startY: 0, moved: false });
 
   // Skins
   const backtilesAtlasRef = useRef<Atlas | null>(null);
   const tilesBlackAtlasRef = useRef<Atlas | null>(null);
   const [atlasesReady, setAtlasesReady] = useState(false);
-  // DOM overlay for the cursor so it can appear above DOM WinLine
-  const cursorOverlayRef = useRef<HTMLDivElement | null>(null);
+  // Cursor overlay removed
 
   const CELL = 64;
   const WIDTH = 6;
@@ -350,9 +340,8 @@ export default function App() {
     isMobile,
     CELL,
     WIDTH,
-    HEIGHT,
-    lastCursorRef,
-    touchStateRef,
+  HEIGHT,
+  lastCursorRef,
     startGame,
     togglePause,
     onWinAdvance: () => {
@@ -382,44 +371,7 @@ export default function App() {
     baseRaiseRateRef,
   });
 
-  // Small diagnostic overlay to show last pointer/tap info when enabled.
-  // Toggle by setting `window.__CSTS_DEBUG_SHOW = true` in the browser console.
-  const DebugOverlay = () => {
-    try {
-      // only render if explicitly enabled
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (!(window as any).__CSTS_DEBUG_SHOW) return null;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const d = (window as any).__CSTS_DEBUG || {};
-      const last = d.lastPointer;
-      if (!last) return null;
-      return (
-        <div
-          style={{
-            position: 'fixed',
-            left: 8,
-            top: 8,
-            zIndex: 9999,
-            background: 'rgba(0,0,0,0.6)',
-            color: 'white',
-            padding: 8,
-            fontSize: 12,
-            borderRadius: 6,
-          }}
-        >
-          <div>Last: {last.type}</div>
-          <div>
-            cell: {last.cellX ?? '-'} / {last.cellY ?? '-'}
-          </div>
-          <div>moved: {String(last.moved ?? false)}</div>
-          <div>dur: {last.duration ?? '-'}</div>
-          <div>phase: {last.phase ?? '-'}</div>
-        </div>
-      );
-    } catch {
-      return null;
-    }
-  };
+  // Debug overlay removed
 
   // Keep isMobile updated on resize / orientation change
   useEffect(() => {
@@ -683,23 +635,7 @@ export default function App() {
 
         canvas.style.filter = s.hasWon || s.hasLost ? 'blur(3px)' : 'none';
 
-        // Update DOM cursor overlay to sit above WinLine (if present)
-        try {
-          const overlay = cursorOverlayRef.current;
-          if (overlay) {
-            const childId = 'dom-cursor-box';
-            // Cursor overlay works in CSS pixels; use cssCell size for positioning
-            const cssCell = canvasWithMeta._cssCellSize || CELL;
-            const cx = s.cursorX * cssCell + 1.5;
-            const cy = s.cursorY * cssCell - (s.scrollOffsetPx ?? 0) + 1.5;
-            const w = cssCell * 2 - 3;
-            const h = cssCell - 3;
-            const radius = Math.min(10, Math.max(4, Math.floor(cssCell * 0.12)));
-            updateCursorOverlay(overlay, childId, cx, cy, w, h, radius);
-          }
-        } catch {
-          /* ignore overlay positioning errors */
-        }
+  // cursor overlay removed
       } else {
         // Title scene: clear
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1035,8 +971,7 @@ export default function App() {
           height: '100%',
         }}
       >
-        {/* Debug overlay - toggle by setting window.__CSTS_DEBUG_SHOW = true in dev console */}
-        <DebugOverlay />
+  {/* debug overlay removed */}
         <div
           style={{
             display: 'grid',
@@ -1085,20 +1020,7 @@ export default function App() {
                     height: isMobile && scene === 'play' ? '100%' : undefined,
                   }}
                 />
-                {/* Cursor overlay: positioned absolutely over the canvas so it can appear above DOM WinLine */}
-                <div
-                  ref={cursorOverlayRef}
-                  aria-hidden
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    width: isMobile && scene === 'play' ? '100%' : WIDTH * CELL,
-                    height: isMobile && scene === 'play' ? '100%' : HEIGHT * CELL,
-                    pointerEvents: 'none',
-                    zIndex: 1400,
-                  }}
-                />
+                {/* cursor overlay removed */}
                 {/* Inline Chain Gauge: 8px tall, sits inside the board container at the top */}
                 <div
                   aria-hidden
@@ -1505,33 +1427,7 @@ export default function App() {
                     </div>
                   </div>
                 )}
-                {/* Mobile swap button: simple floating control for tap-to-swap */}
-                {isMobile && scene === 'play' && (
-                  <button
-                    onClick={() => {
-                      try {
-                        engineRef.current?.swap();
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                    style={{
-                      position: 'absolute',
-                      right: 12,
-                      bottom: 12,
-                      zIndex: 30,
-                      padding: '12px 16px',
-                      fontSize: 18,
-                      borderRadius: 8,
-                      border: 'none',
-                      background: '#34d399',
-                      color: '#062017',
-                      boxShadow: '0 6px 18px rgba(0,0,0,0.3)',
-                    }}
-                  >
-                    Swap
-                  </button>
-                )}
+                {/* mobile swap button removed */}
               </div>
               {/* Footer under the canvas for play page - hide on mobile play for a pure-canvas view */}
               {!(isMobile && scene === 'play') && (
