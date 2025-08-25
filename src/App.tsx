@@ -593,7 +593,7 @@ export default function App() {
     const ctx = canvas.getContext('2d')!;
 
     // Main game loop
-    const loop = () => {
+    const loop = () => { 
       const now = performance.now();
       const dt = now - last;
       last = now;
