@@ -6,6 +6,7 @@ import { Engine } from './game-core/engine';
 import { createEngineManager } from './lib/engineManager';
 
 import { drawStateToCanvas, type Skin } from './renderer/canvasRenderer';
+import { updateCursorOverlay, removeCursorOverlay } from './lib/cursorOverlay';
 import useGameInput from './hooks/useGameInput';
 import { createAudioManager } from './lib/audioManager';
 import { buildBgSkin, buildFgSkin } from './lib/graphics';
@@ -52,6 +53,7 @@ export default function App() {
   const engineRef = useRef<Engine | null>(null);
   const engineMgrRef = useRef(createEngineManager());
   const lastCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const cursorOverlayRef = useRef<HTMLDivElement | null>(null);
 
   // Skins
   const backtilesAtlasRef = useRef<Atlas | null>(null);
@@ -297,6 +299,47 @@ export default function App() {
     selectedLevelIdRef.current = selectedLevelId;
   }, [selectedLevelId]);
 
+  // Remove page scrollbars and prevent scrolling while the game is playing.
+  // This ensures the play view is fixed and doesn't scroll on desktop or mobile.
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const prevOverflow = document.body.style.overflow;
+    const prevTouchAction = (document.body.style as unknown as Record<string, string>)[
+      'touchAction'
+    ] ?? '';
+
+    const onTouchMove = (ev: TouchEvent) => {
+      // Prevent touch-driven scrolling while playing
+      if (scene === 'play') {
+        ev.preventDefault();
+      }
+    };
+
+    if (scene === 'play') {
+      try {
+        document.body.style.overflow = 'hidden';
+        // disable native touch gestures (panning) if supported
+  (document.body.style as unknown as Record<string, string>)['touchAction'] = 'none';
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+      } catch {
+        /* ignore */
+      }
+    }
+
+    return () => {
+      try {
+        // restore previous styles
+        document.body.style.overflow = prevOverflow ?? '';
+        (document.body.style as unknown as Record<string, string>)[
+          'touchAction'
+        ] = prevTouchAction ?? '';
+        window.removeEventListener('touchmove', onTouchMove as EventListener);
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [scene]);
+
   const totalScore = playthroughScores.reduce((s, p) => s + (p?.score ?? 0), 0);
 
   // Auto-start once on mount if this component is used for the /play route.
@@ -433,9 +476,19 @@ export default function App() {
     const computeAndApplySize = () => {
       try {
         const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-        // CSS width should not exceed the logical board width; allow up to 90vw
-        const maxCssWidth = Math.min(WIDTH * CELL, Math.floor(window.innerWidth * 0.9));
-        const cssWidth = Math.max(64, maxCssWidth); // enforce a sensible minimum
+        // Prefer sizing to the board container so canvas exactly matches layout.
+        let cssWidth = 0;
+        try {
+          if (boardRef.current) cssWidth = boardRef.current.clientWidth;
+        } catch {
+          cssWidth = 0;
+        }
+        if (!cssWidth || cssWidth < 1) {
+          // fallback: not mounted or zero width — use window sizing heuristic
+          const maxCssWidth = Math.min(WIDTH * CELL, Math.floor(window.innerWidth * 0.9));
+          cssWidth = Math.max(64, maxCssWidth);
+        }
+
         const scale = cssWidth / (WIDTH * CELL);
         const cssCellSize = CELL * scale; // cell size in CSS pixels
 
@@ -449,6 +502,16 @@ export default function App() {
         canvas.width = backingWidth;
         canvas.height = backingHeight;
 
+        // Ensure the board container matches the canvas CSS size so there
+        // isn't a visible gap between the canvas and the container edges.
+        try {
+          if (boardRef.current) {
+            boardRef.current.style.width = `${cssWidth}px`;
+            boardRef.current.style.height = `${cssHeight}px`;
+          }
+        } catch {
+          /* ignore */
+        }
         // store current DPR and cell CSS size for rendering
         canvasWithMeta._devicePixelRatio = dpr;
         canvasWithMeta._cssCellSize = cssCellSize;
@@ -483,6 +546,16 @@ export default function App() {
     const onResize = () => computeAndApplySize();
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
+    // Observe the board container for size changes so the canvas matches it exactly
+    let boardObserver: ResizeObserver | null = null;
+    try {
+      if (boardRef.current && typeof ResizeObserver !== 'undefined') {
+        boardObserver = new ResizeObserver(() => computeAndApplySize());
+        boardObserver.observe(boardRef.current);
+      }
+    } catch {
+      boardObserver = null;
+    }
 
     // input handlers moved to useGameInput hook
     // Auto-pause when the tab/window loses focus
@@ -577,13 +650,42 @@ export default function App() {
           const cssCell = canvasWithMeta._cssCellSize || CELL;
           const canvasCellSize = cssCell * dpr;
           const scrollPx = (s2.scrollOffsetPx ?? 0) * dpr;
-          drawStateToCanvas(ctx, s2, canvasCellSize, dt, scrollPx, bgSkin, fgSkin);
+          const useOverlay = !!cursorOverlayRef.current;
+          drawStateToCanvas(ctx, s2, canvasCellSize, dt, scrollPx, bgSkin, fgSkin, !useOverlay);
+          // Update DOM overlay if present
+          try {
+            if (cursorOverlayRef.current) {
+              const childId = 'dom-cursor-svg';
+              const cxCss = s2.cursorX * cssCell;
+              const cyCss = s2.cursorY * cssCell - (s2.scrollOffsetPx ?? 0);
+              const w = cssCell * 2;
+              const h = cssCell;
+              const radius = Math.max(4, Math.floor(cssCell * 0.08));
+              updateCursorOverlay(cursorOverlayRef.current, childId, cxCss, cyCss, w, h, radius);
+            }
+          } catch {
+            /* ignore */
+          }
         } else {
           const dpr = canvasWithMeta._devicePixelRatio || 1;
           const cssCell = canvasWithMeta._cssCellSize || CELL;
           const canvasCellSize = cssCell * dpr;
           const scrollPx = (s.scrollOffsetPx ?? 0) * dpr;
-          drawStateToCanvas(ctx, s, canvasCellSize, dt, scrollPx, bgSkin, fgSkin);
+          const useOverlay = !!cursorOverlayRef.current;
+          drawStateToCanvas(ctx, s, canvasCellSize, dt, scrollPx, bgSkin, fgSkin, !useOverlay);
+          try {
+            if (cursorOverlayRef.current) {
+              const childId = 'dom-cursor-svg';
+              const cxCss = s.cursorX * cssCell;
+              const cyCss = s.cursorY * cssCell - (s.scrollOffsetPx ?? 0);
+              const w = cssCell * 2;
+              const h = cssCell;
+              const radius = Math.max(4, Math.floor(cssCell * 0.08));
+              updateCursorOverlay(cursorOverlayRef.current, childId, cxCss, cyCss, w, h, radius);
+            }
+          } catch {
+            /* ignore */
+          }
         }
 
         lastCursorRef.current = { x: s.cursorX, y: s.cursorY };
@@ -653,6 +755,16 @@ export default function App() {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('orientationchange', onResize);
+      try {
+        if (boardObserver) boardObserver.disconnect();
+      } catch {
+        /* ignore */
+      }
+      try {
+        if (cursorOverlayRef.current) removeCursorOverlay(cursorOverlayRef.current, 'dom-cursor-svg');
+      } catch {
+        /* ignore */
+      }
     };
     // startGame and togglePause are stable, so we can safely ignore them for this effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -946,6 +1058,7 @@ export default function App() {
   const containerWidth =
     isMobile && scene === 'play' ? '100vw' : `min(${WIDTH * CELL + 280}px, 90vw)`;
   const boardCssWidth = isMobile && scene === 'play' ? '100%' : WIDTH * CELL;
+  const boardRef = useRef<HTMLDivElement | null>(null);
 
   return (
     <div
@@ -992,7 +1105,8 @@ export default function App() {
           >
             <div>
               {/* Game grid and overlays */}
-              <div
+        <div
+                ref={boardRef}
                 style={{
                   position: 'relative',
                   width: boardCssWidth,
@@ -1008,19 +1122,31 @@ export default function App() {
                   backgroundPosition: 'center',
                 }}
               >
-                <canvas
-                  ref={canvasRef}
-                  width={WIDTH * CELL}
-                  height={HEIGHT * CELL}
-                  style={{
-                    borderRadius: 8,
-                    position: 'relative',
-                    zIndex: 1000,
-                    width: isMobile && scene === 'play' ? '100%' : undefined,
-                    height: isMobile && scene === 'play' ? '100%' : undefined,
-                  }}
-                />
-                {/* cursor overlay removed */}
+                        <canvas
+                          ref={canvasRef}
+                          width={WIDTH * CELL}
+                          height={HEIGHT * CELL}
+                          style={{
+                            borderRadius: 8,
+                            position: 'relative',
+                            zIndex: 1000,
+                            width: isMobile && scene === 'play' ? '100%' : undefined,
+                            height: isMobile && scene === 'play' ? '100%' : undefined,
+                          }}
+                        />
+                        {/* DOM cursor overlay: positioned over canvas; pointer-events:none */}
+                        <div
+                          ref={(el) => (cursorOverlayRef.current = el)}
+                          style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            width: '100%',
+                            height: '100%',
+                            pointerEvents: 'none',
+                            zIndex: 1250,
+                          }}
+                        />
                 {/* Inline Chain Gauge: 8px tall, sits inside the board container at the top */}
                 <div
                   aria-hidden

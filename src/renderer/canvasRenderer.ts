@@ -90,6 +90,8 @@ export function drawStateToCanvas(
   scrollOffsetPx = 0,
   bgSkin?: Skin,
   fgSkin?: Skin,
+  // When provided as `false` the renderer will skip drawing the cursor on the canvas
+  drawCursorOnCanvas = true,
   canvasBgImage?: HTMLImageElement | null,
 ) {
   const { width, height, grid, colors, phase, fallPieces, clearLineY } = state;
@@ -206,8 +208,40 @@ export function drawStateToCanvas(
   // Win line is rendered in DOM (WinLine component). Canvas renderer no
   // longer draws the solid white win threshold so the UI can supply a
   // styled, accessible bar that animates independently of the canvas.
-
-  // Cursor outline is rendered as a DOM/SVG overlay in the App so it can
-  // appear above DOM elements (e.g. WinLine). Do not draw it here to avoid
-  // duplicate visuals.
+  // Draw cursor outline on canvas only when requested. When a DOM/SVG overlay
+  // is active we prefer the overlay styling; the canvas cursor is a fallback
+  // for environments without the overlay.
+  if (drawCursorOnCanvas) {
+    try {
+      const cx = (state.cursorX || 0) * cellSize;
+      const cy = (state.cursorY || 0) * cellSize - scrollOffsetPx;
+      const cw = cellSize * 2;
+      const ch = cellSize;
+      ctx.save();
+      // subtle drop shadow glow
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = Math.max(2, Math.floor(cellSize * 0.06));
+      ctx.lineWidth = Math.max(2, Math.floor(cellSize * 0.06));
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+      // rounded rect stroke
+      const r = Math.max(4, Math.floor(cellSize * 0.08));
+      const x = cx + 1.5;
+      const y = cy + 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + cw - r, y);
+      ctx.quadraticCurveTo(x + cw, y, x + cw, y + r);
+      ctx.lineTo(x + cw, y + ch - r);
+      ctx.quadraticCurveTo(x + cw, y + ch, x + cw - r, y + ch);
+      ctx.lineTo(x + r, y + ch);
+      ctx.quadraticCurveTo(x, y + ch, x, y + ch - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    } catch {
+      /* ignore cursor draw errors */
+    }
+  }
 }
