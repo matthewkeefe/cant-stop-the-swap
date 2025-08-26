@@ -8,6 +8,7 @@ import { createEngineManager } from './lib/engineManager';
 import { drawStateToCanvas, type Skin } from './renderer/canvasRenderer';
 import { updateCursorOverlay, removeCursorOverlay } from './lib/cursorOverlay';
 import useGameInput from './hooks/useGameInput';
+import useCanvasGestures, { type GestureApi } from './hooks/useCanvasGestures';
 import { createAudioManager } from './lib/audioManager';
 import { buildBgSkin, buildFgSkin } from './lib/graphics';
 
@@ -383,19 +384,14 @@ export default function App() {
     isMobile,
     CELL,
     WIDTH,
-  HEIGHT,
-  lastCursorRef,
+    HEIGHT,
+    lastCursorRef,
     startGame,
     togglePause,
+    // When user presses Z/Space after a win, advance to the next level
     onWinAdvance: () => {
-      if (advancingRef.current) return;
       try {
-        if (musicRef.current) fadeOutAndStopMusic(300);
-      } catch {
-        void 0;
-      }
-      try {
-        const idx = LEVELS.findIndex((l) => l.id === selectedLevelIdRef.current);
+        const idx = LEVELS.findIndex((l) => l.id === selectedLevelId);
         const nextIdx = idx + 1;
         if (nextIdx >= LEVELS.length) {
           navigate('/you-beat');
@@ -404,7 +400,7 @@ export default function App() {
           advanceToLevel(nextId);
         }
       } catch {
-        void 0;
+        /* ignore */
       }
     },
     selectedLevelIdRef,
@@ -413,6 +409,71 @@ export default function App() {
     xPrevRateRef,
     baseRaiseRateRef,
   });
+
+  // Gesture API: map client coords -> cell, and call engine methods.
+  // drawFrameImmediate renders the current engine state to the canvas once.
+  const drawFrameImmediate = useCallback(() => {
+    const canvas = canvasRef.current;
+    const engine = engineRef.current;
+    if (!canvas || !engine) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const dpr = rect.width > 0 ? canvas.width / rect.width : 1;
+    const canvasCellSize = canvas.width / WIDTH; // in canvas pixels
+    const s = engine.getState();
+    const scrollPx = (s.scrollOffsetPx ?? 0) * dpr;
+    try {
+      drawStateToCanvas(ctx, s, canvasCellSize, 16, scrollPx);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const gestureApiRef = useRef<GestureApi | null>(null);
+  if (!gestureApiRef.current) {
+    gestureApiRef.current = {
+      screenToCell: (pt) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        const relX = pt.x - rect.left;
+        const relY = pt.y - rect.top;
+        // Prefer a stored CSS cell size (set during computeAndApplySize) so
+        // hit-testing matches how we compute engine.cellSize. Fall back to
+        // dividing the bounding rect when not available.
+        const canvasWithMeta = canvas as HTMLCanvasElement & { _cssCellSize?: number };
+        const cssCell = canvasWithMeta._cssCellSize ?? (rect.height / HEIGHT);
+  const round = (v: number, max: number) => Math.max(0, Math.min(max - 1, Math.round(v)));
+  const col = round(relX / cssCell, WIDTH);
+  const row = round(relY / cssCell, HEIGHT);
+  return { col, row };
+      },
+      moveCursorToCell: (col, row) => {
+        try {
+          engineRef.current?.setCursorAbsolute(col, row);
+          lastCursorRef.current = { x: col, y: row };
+        } catch {
+          /* ignore */
+        }
+        drawFrameImmediate();
+      },
+      swapWithNeighbor: (col, row, dir) => {
+        try {
+          if (!engineRef.current) return;
+          if (dir === 'right') engineRef.current.swapAt(col, row);
+          else engineRef.current.swapAt(Math.max(0, col - 1), row);
+        } catch {
+          /* ignore */
+        }
+        drawFrameImmediate();
+      },
+      drawFrame: () => drawFrameImmediate(),
+    };
+  }
+
+  // Attach gestures to the canvas
+  useCanvasGestures(canvasRef, gestureApiRef.current);
 
   // Debug overlay removed
 
@@ -464,7 +525,8 @@ export default function App() {
 
   // Main game and input handling loop
   useEffect(() => {
-    const canvas = canvasRef.current!;
+  const canvas = canvasRef.current!;
+  const boardEl = boardRef.current;
     // Typed alias so we can attach small runtime bookkeeping fields without `any`.
     const canvasWithMeta = canvas as HTMLCanvasElement & {
       _devicePixelRatio?: number;
@@ -476,7 +538,67 @@ export default function App() {
     const computeAndApplySize = () => {
       try {
         const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-        // Prefer sizing to the board container so canvas exactly matches layout.
+
+        // If on mobile in play scene, compute a cell size that fits the
+        // visual viewport (so the entire board is visible) and center the
+        // board as a fixed element so it visually fills the screen.
+        if (isMobile && scene === 'play') {
+          try {
+            const vv = (window.visualViewport as VisualViewport | undefined);
+            const baseW = vv && typeof vv.width === 'number' ? vv.width : document.documentElement?.clientWidth || window.innerWidth || 320;
+            const baseH = vv && typeof vv.height === 'number' ? vv.height : document.documentElement?.clientHeight || window.innerHeight || 568;
+            const cssCellSize = Math.max(1, Math.floor(Math.min(baseW / WIDTH, baseH / HEIGHT)));
+            const cssWidth = Math.max(1, Math.round(cssCellSize * WIDTH));
+            const cssHeight = Math.max(1, Math.round(cssCellSize * HEIGHT));
+
+            const backingWidth = Math.round(cssWidth * dpr);
+            const backingHeight = Math.round(cssHeight * dpr);
+
+            canvas.style.width = `${cssWidth}px`;
+            canvas.style.height = `${cssHeight}px`;
+            canvas.width = backingWidth;
+            canvas.height = backingHeight;
+
+            try {
+              if (boardRef.current) {
+                // Mark and style the board as mobile-fixed so we can reliably
+                // detect and remove these styles when returning to desktop.
+                boardRef.current.classList.add('csts-mobile-fixed');
+                boardRef.current.style.position = 'fixed';
+                boardRef.current.style.left = '50%';
+                boardRef.current.style.top = '50%';
+                boardRef.current.style.transform = 'translate(-50%,-50%)';
+                boardRef.current.style.width = `${cssWidth}px`;
+                boardRef.current.style.height = `${cssHeight}px`;
+                boardRef.current.style.margin = '0';
+                boardRef.current.style.maxWidth = 'none';
+              }
+            } catch {
+              /* ignore */
+            }
+
+            canvasWithMeta._devicePixelRatio = dpr;
+            canvasWithMeta._cssCellSize = cssCellSize;
+
+            if (engineRef.current) {
+              engineRef.current.cellSize = cssCellSize;
+              try {
+                if (baseRaiseRateRef.current) {
+                  engineRef.current.scrollSpeedPxPerSec =
+                    baseRaiseRateRef.current * engineRef.current.cellSize;
+                }
+              } catch {
+                /* ignore */
+              }
+            }
+
+            return;
+          } catch {
+            // fall through to default sizing below
+          }
+        }
+
+        // Default/responsive sizing: prefer board container then visualViewport
         let cssWidth = 0;
         try {
           if (boardRef.current) cssWidth = boardRef.current.clientWidth;
@@ -484,8 +606,11 @@ export default function App() {
           cssWidth = 0;
         }
         if (!cssWidth || cssWidth < 1) {
-          // fallback: not mounted or zero width — use window sizing heuristic
-          const maxCssWidth = Math.min(WIDTH * CELL, Math.floor(window.innerWidth * 0.9));
+          const vv = (window.visualViewport as VisualViewport | undefined);
+          const vvWidth: number | undefined = vv && typeof vv.width === 'number' ? vv.width : undefined;
+          const docWidth = document.documentElement ? document.documentElement.clientWidth : 0;
+          const fallbackBase = vvWidth || docWidth || window.innerWidth || 0;
+          const maxCssWidth = Math.min(WIDTH * CELL, Math.floor(fallbackBase * 0.9));
           cssWidth = Math.max(64, maxCssWidth);
         }
 
@@ -506,6 +631,20 @@ export default function App() {
         // isn't a visible gap between the canvas and the container edges.
         try {
           if (boardRef.current) {
+            // If mobile branch previously added fixed positioning, remove it
+            if (boardRef.current.classList.contains('csts-mobile-fixed')) {
+              boardRef.current.classList.remove('csts-mobile-fixed');
+              try {
+                boardRef.current.style.removeProperty('position');
+                boardRef.current.style.removeProperty('left');
+                boardRef.current.style.removeProperty('top');
+                boardRef.current.style.removeProperty('transform');
+                boardRef.current.style.removeProperty('margin');
+                boardRef.current.style.removeProperty('max-width');
+              } catch {
+                /* ignore */
+              }
+            }
             boardRef.current.style.width = `${cssWidth}px`;
             boardRef.current.style.height = `${cssHeight}px`;
           }
@@ -541,7 +680,7 @@ export default function App() {
       }
     };
 
-    // Initial sizing and on resize/orientation change
+  // Initial sizing and on resize/orientation change
     computeAndApplySize();
     const onResize = () => computeAndApplySize();
     window.addEventListener('resize', onResize);
@@ -749,7 +888,7 @@ export default function App() {
     };
     raf = requestAnimationFrame(loop);
 
-    return () => {
+  return () => {
       window.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onWindowBlur);
       cancelAnimationFrame(raf);
@@ -765,10 +904,29 @@ export default function App() {
       } catch {
         /* ignore */
       }
+        // Clean any mobile-only inline styles that may have been applied
+          try {
+            if (boardEl && boardEl.classList.contains('csts-mobile-fixed')) {
+              boardEl.classList.remove('csts-mobile-fixed');
+              try {
+                boardEl.style.removeProperty('position');
+                boardEl.style.removeProperty('left');
+                boardEl.style.removeProperty('top');
+                boardEl.style.removeProperty('transform');
+                boardEl.style.removeProperty('margin');
+                boardEl.style.removeProperty('max-width');
+              } catch {
+                /* ignore */
+              }
+            }
+        } catch {
+          /* ignore */
+        }
     };
     // startGame and togglePause are stable, so we can safely ignore them for this effect
+    // Re-run when `isMobile` changes so any mobile-only styling is recalculated/reset
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scene, atlasesReady]);
+  }, [scene, atlasesReady, isMobile]);
 
   // (single fadeOutAndStopMusic defined above with useCallback)
 
@@ -1132,6 +1290,7 @@ export default function App() {
                             zIndex: 1000,
                             width: isMobile && scene === 'play' ? '100%' : undefined,
                             height: isMobile && scene === 'play' ? '100%' : undefined,
+                            touchAction: 'none',
                           }}
                         />
                         {/* DOM cursor overlay: positioned over canvas; pointer-events:none */}
